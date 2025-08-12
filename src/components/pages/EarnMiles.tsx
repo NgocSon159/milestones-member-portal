@@ -1,0 +1,1 @@
+// This file has been removed as the Earn Miles page is no longer needed
