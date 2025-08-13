@@ -17,10 +17,6 @@ export function LoginForm({ onLoginSuccess, onRegisterClick }: LoginFormProps) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Valid credentials
-  const VALID_EMAIL = "member01@gmail.com";
-  const VALID_PASSWORD = "Aa12345!";
-
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
@@ -30,21 +26,34 @@ export function LoginForm({ onLoginSuccess, onRegisterClick }: LoginFormProps) {
     setError("");
     setIsLoading(true);
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    if (email === VALID_EMAIL && password === VALID_PASSWORD) {
-      // Login successful
-      onLoginSuccess({
-        email: email,
-        name: "MR.JOHN"
+    try {
+      const response = await fetch("https://mileswise-be.onrender.com/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
       });
-    } else {
-      // Login failed
-      setError("Invalid email or password. Please try again.");
-    }
 
-    setIsLoading(false);
+      const data = await response.json();
+
+      if (response.ok) {
+        // Login successful - assuming the API returns some user data.
+        // For now, we'll use the email and a default name.
+        onLoginSuccess({
+          email: email,
+          name: data.name || "Logged In User", // Or extract name from response if available
+        });
+      } else {
+        // Login failed - use error message from API or a default one
+        setError(data.message || "Invalid email or password. Please try again.");
+      }
+    } catch (error) {
+      // Handle network errors or other exceptions
+      setError("An unexpected error occurred. Please try again later.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -131,7 +140,7 @@ export function LoginForm({ onLoginSuccess, onRegisterClick }: LoginFormProps) {
             </div>
 
             {/* Sign In Button */}
-            <Button 
+            <Button
               type="submit"
               className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white font-medium mb-6"
               disabled={isLoading}
@@ -153,8 +162,8 @@ export function LoginForm({ onLoginSuccess, onRegisterClick }: LoginFormProps) {
           {/* Demo Credentials */}
           <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-700 font-medium mb-1">Demo Credentials:</p>
-            <p className="text-xs text-blue-600">Email: member01@gmail.com</p>
-            <p className="text-xs text-blue-600">Password: Aa12345!</p>
+            <p className="text-xs text-blue-600">Email: alice@example.com</p>
+            <p className="text-xs text-blue-600">Password: password123</p>
           </div>
 
           {/* Divider */}
