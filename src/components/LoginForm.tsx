@@ -40,6 +40,10 @@ export function LoginForm({ onLoginSuccess, onRegisterClick }: LoginFormProps) {
       if (response.ok) {
         // Login successful - assuming the API returns some user data.
         // For now, we'll use the email and a default name.
+        if (data.token && data.id) {
+          localStorage.setItem("token", data.token);
+          localStorage.setItem("id", data.id);
+        }
         onLoginSuccess({
           email: email,
           name: data.name || "Logged In User", // Or extract name from response if available
