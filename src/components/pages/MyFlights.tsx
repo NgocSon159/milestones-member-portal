@@ -1,29 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "../ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Input } from "../ui/input";
-import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Checkbox } from "../ui/checkbox";
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "../ui/pagination";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "../ui/pagination";
 import { toast } from "sonner";
 import { useEarnMiles } from "../EarnMilesContext";
 import { getMemberData } from "../shared/memberData";
 import { 
   Plane, 
   Calendar,
-  Clock,
   MapPin,
   Users,
-  Luggage,
-  Ticket,
   Download,
   CheckCircle,
   AlertCircle,
-  Loader,
   Calculator,
   Send,
   X,
@@ -35,18 +29,46 @@ import {
   TrendingUp
 } from "lucide-react";
 
+interface Flight {
+  id: string;
+  flightNumber: string;
+  airline: string;
+  from: { code: string; city: string; country: string; };
+  to: { code: string; city: string; country: string; };
+  departureDate: string;
+  departureTime: string;
+  arrivalDate: string;
+  arrivalTime: string;
+  duration: string;
+  aircraft: string;
+  class: string;
+  seatNumber: string;
+  gate: string;
+  terminal: string;
+  status: string;
+  bookingReference: string;
+  eTicket: string;
+  miles: number;
+  bonusMiles?: number;
+  distance: number;
+  milesRequested?: boolean | "pending";
+}
+
 interface MyFlightsProps {
-  onPageChange?: (page: string, params?: any) => void;
   initialTab?: string;
   initialFilter?: string;
 }
 
-export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter }: MyFlightsProps) {
+export function MyFlights({ initialTab = "upcoming", initialFilter }: MyFlightsProps) {
   const [selectedTab, setSelectedTab] = useState(initialTab);
   const [completedFlightFilter, setCompletedFlightFilter] = useState<"all" | "not-requested" | "requested">("all");
   const [dateFilter, setDateFilter] = useState({ from: "", to: "" });
   const [showEarnMilesDialog, setShowEarnMilesDialog] = useState(false);
-  const [selectedFlight, setSelectedFlight] = useState<any>(null);
+  const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [calculatedMilesResult, setCalculatedMilesResult] = useState<{ qualifyingMiles: number; bonusMiles: number } | null>(null);
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,6 +89,83 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
   
   // Get member data for miles calculations
   const memberData = getMemberData(requests);
+
+  // Fetch flights from API
+  const fetchFlights = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    let statusParam = selectedTab;
+    if (selectedTab === "past") {
+      statusParam = "completed";
+    }
+
+    try {
+      const token = localStorage.getItem('token'); // Assuming token is stored in local storage
+      const response = await fetch(`https://mileswise-be.onrender.com/api/member/my-flights?status=${statusParam}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      
+      const mappedFlights: Flight[] = data.map((item: any) => {
+        const departureDate = item.startTime ? item.startTime.split('T')[0] : "";
+        const departureTime = item.startTime ? item.startTime.split('T')[1].substring(0, 5) : "";
+        const arrivalDate = item.endTime ? item.endTime.split('T')[0] : "";
+        const arrivalTime = item.endTime ? item.endTime.split('T')[1].substring(0, 5) : "";
+        const durationMs = item.endTime && item.startTime ? new Date(item.endTime).getTime() - new Date(item.startTime).getTime() : 0;
+        const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
+        const durationMinutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+        const duration = durationMs > 0 ? `${durationHours}h ${durationMinutes}m` : "N/A";
+
+        return {
+          id: item.id,
+          flightNumber: item.flightNumber,
+          airline: item.airline,
+          from: { 
+            code: item.departure,
+            city: item.departureInfo?.city || "N/A",
+            country: "Vietnam" 
+          },
+          to: { 
+            code: item.arrival,
+            city: item.arrivalInfo?.city || "N/A",
+            country: "Vietnam" 
+          },
+          departureDate: departureDate,
+          departureTime: departureTime,
+          arrivalDate: arrivalDate,
+          arrivalTime: arrivalTime,
+          duration: duration,
+          aircraft: "Airbus A321", // Placeholder, as not in response
+          class: item.serviceClass,
+          seatNumber: item.seat,
+          gate: `A${Math.floor(Math.random() * 20) + 1}`, // Random data
+          terminal: item.arrivalInfo?.terminal || "N/A",
+          status: item.status,
+          bookingReference: item.bookingNumber,
+          eTicket: item.bookingNumber,
+          miles: item.distance,
+          bonusMiles: item.distance,
+          distance: item.distance,
+          milesRequested: false // Default to false as per request
+        };
+      });
+      setFlights(mappedFlights);
+    } catch (e: any) {
+      setError(e.message);
+      toast.error(`Failed to fetch flights: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedTab, hasRequestForFlight, getRequestForFlight]);
+
+  useEffect(() => {
+    fetchFlights();
+  }, [fetchFlights, selectedTab, initialFilter]); // Add selectedTab here
 
   // Calculate bonus miles based on service class
   const calculateBonusMiles = (qualifyingMiles: number, serviceClass: string) => {
@@ -90,286 +189,28 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
     };
   };
 
-  // Enhanced flight data with 10+ flights for each category
-  const allFlights = [
-    // UPCOMING FLIGHTS (12 flights)
-    {
-      id: "upcoming_1",
-      flightNumber: "VN204",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      departureDate: "2024-12-20",
-      departureTime: "08:30",
-      arrivalDate: "2024-12-20",
-      arrivalTime: "10:45",
-      duration: "2h 15m",
-      aircraft: "Airbus A321",
-      class: "Business",
-      seatNumber: "3A",
-      status: "Confirmed",
-      bookingReference: "VN2X4Y",
-      eTicket: "2201234567890",
-      miles: 1250,
-      distance: 750,
-      type: "upcoming"
-    },
-    {
-      id: "upcoming_2",
-      flightNumber: "VN548",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "NRT", city: "Tokyo", country: "Japan" },
-      departureDate: "2024-12-25",
-      departureTime: "14:20",
-      arrivalDate: "2024-12-25",
-      arrivalTime: "21:30",
-      duration: "5h 10m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "28F",
-      status: "Confirmed",
-      bookingReference: "VN8K9L",
-      eTicket: "2201234567891",
-      miles: 2850,
-      distance: 2850,
-      type: "upcoming"
-    },
-    ...Array.from({ length: 10 }, (_, i) => ({
-      id: `upcoming_${i + 3}`,
-      flightNumber: `VN${600 + i}`,
-      airline: "Vietnam Airlines",
-      from: { code: i % 2 === 0 ? "HAN" : "SGN", city: i % 2 === 0 ? "Hanoi" : "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: i % 3 === 0 ? "BKK" : i % 3 === 1 ? "NRT" : "SIN", city: i % 3 === 0 ? "Bangkok" : i % 3 === 1 ? "Tokyo" : "Singapore", country: i % 3 === 0 ? "Thailand" : i % 3 === 1 ? "Japan" : "Singapore" },
-      departureDate: `2024-12-${String(Math.floor(Math.random() * 10) + 20).padStart(2, '0')}`,
-      departureTime: `${String(Math.floor(Math.random() * 12) + 6).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
-      arrivalDate: `2024-12-${String(Math.floor(Math.random() * 10) + 20).padStart(2, '0')}`,
-      arrivalTime: `${String(Math.floor(Math.random() * 12) + 12).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
-      duration: `${Math.floor(Math.random() * 4) + 2}h ${Math.floor(Math.random() * 60)}m`,
-      aircraft: Math.random() > 0.5 ? "Airbus A321" : "Boeing 787",
-      class: Math.random() > 0.7 ? "Business" : Math.random() > 0.3 ? "Premium Economy" : "Economy",
-      seatNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 6))}${Math.floor(Math.random() * 30) + 1}`,
-      status: "Confirmed",
-      bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-      eTicket: `220123456789${i + 20}`,
-      miles: Math.floor(Math.random() * 3000) + 500,
-      distance: Math.floor(Math.random() * 2000) + 600,
-      type: "upcoming"
-    })),
-    
-    // ONGOING FLIGHTS (11 flights)  
-    {
-      id: "ongoing_1",
-      flightNumber: "VN123",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "CDG", city: "Paris", country: "France" },
-      departureDate: "2024-08-15",
-      departureTime: "23:50",
-      arrivalDate: "2024-08-16",
-      arrivalTime: "07:30",
-      duration: "12h 40m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "2A",
-      status: "Ongoing",
-      bookingReference: "VN9M8N",
-      eTicket: "2201234567892",
-      miles: 8500,
-      distance: 8500,
-      type: "ongoing"
-    },
-    ...Array.from({ length: 10 }, (_, i) => ({
-      id: `ongoing_${i + 2}`,
-      flightNumber: `VN${700 + i}`,
-      airline: "Vietnam Airlines",
-      from: { code: i % 2 === 0 ? "HAN" : "SGN", city: i % 2 === 0 ? "Hanoi" : "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: i % 4 === 0 ? "LHR" : i % 4 === 1 ? "CDG" : i % 4 === 2 ? "FRA" : "SYD", city: i % 4 === 0 ? "London" : i % 4 === 1 ? "Paris" : i % 4 === 2 ? "Frankfurt" : "Sydney", country: i % 4 === 0 ? "UK" : i % 4 === 1 ? "France" : i % 4 === 2 ? "Germany" : "Australia" },
-      departureDate: "2024-08-15",
-      departureTime: `${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
-      arrivalDate: "2024-08-16",
-      arrivalTime: `${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
-      duration: `${Math.floor(Math.random() * 8) + 6}h ${Math.floor(Math.random() * 60)}m`,
-      aircraft: Math.random() > 0.5 ? "Boeing 787" : "Airbus A350",
-      class: Math.random() > 0.6 ? "Business" : Math.random() > 0.2 ? "Premium Economy" : "Economy",
-      seatNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 6))}${Math.floor(Math.random() * 30) + 1}`,
-      status: "Ongoing",
-      bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-      eTicket: `220123456790${i + 30}`,
-      miles: Math.floor(Math.random() * 6000) + 2000,
-      distance: Math.floor(Math.random() * 6000) + 2000,
-      type: "ongoing"
-    })),
-
-    // CANCELLED FLIGHTS (11 flights)
-    {
-      id: "cancelled_1",
-      flightNumber: "VN999",
-      airline: "Vietnam Airlines", 
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      departureDate: "2024-07-15",
-      departureTime: "16:30",
-      arrivalDate: "2024-07-15", 
-      arrivalTime: "18:45",
-      duration: "2h 15m",
-      aircraft: "Airbus A321",
-      class: "Economy",
-      seatNumber: "12C",
-      status: "Cancelled",
-      bookingReference: "VN9M8N",
-      eTicket: "2201234567892",
-      miles: 1250,
-      distance: 750,
-      type: "cancelled"
-    },
-    ...Array.from({ length: 10 }, (_, i) => ({
-      id: `cancelled_${i + 2}`,
-      flightNumber: `VN${800 + i}`,
-      airline: "Vietnam Airlines",
-      from: { code: i % 2 === 0 ? "HAN" : "SGN", city: i % 2 === 0 ? "Hanoi" : "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: i % 3 === 0 ? "DAD" : i % 3 === 1 ? "CXR" : "BMV", city: i % 3 === 0 ? "Da Nang" : i % 3 === 1 ? "Cam Ranh" : "Buon Ma Thuot", country: "Vietnam" },
-      departureDate: `2024-0${Math.floor(Math.random() * 6) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
-      departureTime: `${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
-      arrivalDate: `2024-0${Math.floor(Math.random() * 6) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
-      arrivalTime: `${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
-      duration: `${Math.floor(Math.random() * 3) + 1}h ${Math.floor(Math.random() * 60)}m`,
-      aircraft: "Airbus A321",
-      class: Math.random() > 0.8 ? "Business" : Math.random() > 0.4 ? "Premium Economy" : "Economy",
-      seatNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 6))}${Math.floor(Math.random() * 30) + 1}`,
-      status: "Cancelled",
-      bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-      eTicket: `220123456791${i + 40}`,
-      miles: Math.floor(Math.random() * 1500) + 300,
-      distance: Math.floor(Math.random() * 1000) + 300,
-      type: "cancelled"
-    })),
-
-    // COMPLETED FLIGHTS - INCLUDING MILES REQUESTED FLIGHTS
-    // First, completed flights from EarnMilesContext
-    ...requests
-      .filter(req => req.status === 'approved')
-      .map((req, i) => ({
-        id: `past_${req.id}`,
-        flightNumber: req.flightNumber,
-        airline: req.airline,
-        from: { code: req.from.split(' - ')[0], city: req.from.split(' - ')[1], country: "Vietnam" },
-        to: { code: req.to.split(' - ')[0], city: req.to.split(' - ')[1], country: req.to.includes('Bangkok') ? 'Thailand' : req.to.includes('Tokyo') ? 'Japan' : req.to.includes('Singapore') ? 'Singapore' : req.to.includes('Seoul') ? 'South Korea' : req.to.includes('Paris') ? 'France' : req.to.includes('Sydney') ? 'Australia' : req.to.includes('Frankfurt') ? 'Germany' : req.to.includes('Manila') ? 'Philippines' : req.to.includes('Jakarta') ? 'Indonesia' : req.to.includes('Kuala Lumpur') ? 'Malaysia' : req.to.includes('Phnom Penh') ? 'Cambodia' : req.to.includes('Yangon') ? 'Myanmar' : req.to.includes('Vientiane') ? 'Laos' : "Vietnam" },
-        departureDate: req.departureDate,
-        departureTime: "10:00",
-        arrivalDate: req.departureDate,
-        arrivalTime: "12:15",
-        duration: "2h 15m",
-        aircraft: req.serviceClass === 'Business' ? "Boeing 787" : "Airbus A321",
-        class: req.serviceClass,
-        seatNumber: req.seatClass + Math.floor(Math.random() * 30 + 1),
-        status: "Completed",
-        bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-        eTicket: `2201234567${i + 100}`,
-        miles: req.calculatedMiles, // Qualifying miles
-        bonusMiles: req.bonusMiles || req.calculatedMiles, // Bonus miles
-        distance: req.distance,
-        type: "past",
-        milesRequested: true
-      })),
-    
-    // Add completed flights that haven't requested miles yet
-    ...Array.from({ length: 15 }, (_, i) => {
-      const qualifyingMiles = Math.floor(Math.random() * 4000) + 800;
-      const serviceClass = Math.random() > 0.7 ? "Business" : Math.random() > 0.3 ? "Premium Economy" : "Economy";
-      const multiplier = serviceClass === 'Business' ? 1.45 : serviceClass === 'Premium Economy' ? 1.3 : 1.0;
-      const bonusMiles = Math.round(qualifyingMiles * multiplier);
-      
-      return {
-        id: `past_extra_${i + 1}`,
-        flightNumber: `VN${900 + i}`,
-        airline: "Vietnam Airlines",
-        from: { code: i % 2 === 0 ? "HAN" : "SGN", city: i % 2 === 0 ? "Hanoi" : "Ho Chi Minh City", country: "Vietnam" },
-        to: { code: i % 5 === 0 ? "BKK" : i % 5 === 1 ? "NRT" : i % 5 === 2 ? "SIN" : i % 5 === 3 ? "ICN" : "KUL", city: i % 5 === 0 ? "Bangkok" : i % 5 === 1 ? "Tokyo" : i % 5 === 2 ? "Singapore" : i % 5 === 3 ? "Seoul" : "Kuala Lumpur", country: i % 5 === 0 ? "Thailand" : i % 5 === 1 ? "Japan" : i % 5 === 2 ? "Singapore" : i % 5 === 3 ? "South Korea" : "Malaysia" },
-        departureDate: `2024-0${Math.floor(Math.random() * 8) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
-        departureTime: `${String(Math.floor(Math.random() * 16) + 6).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
-        arrivalDate: `2024-0${Math.floor(Math.random() * 8) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
-        arrivalTime: `${String(Math.floor(Math.random() * 16) + 8).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
-        duration: `${Math.floor(Math.random() * 6) + 2}h ${Math.floor(Math.random() * 60)}m`,
-        aircraft: Math.random() > 0.5 ? "Boeing 787" : "Airbus A321",
-        class: serviceClass,
-        seatNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 6))}${Math.floor(Math.random() * 30) + 1}`,
-        status: "Completed",
-        bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-        eTicket: `2201234567${i + 200}`,
-        miles: qualifyingMiles, // Qualifying miles
-        bonusMiles: bonusMiles, // Bonus miles
-        distance: Math.floor(Math.random() * 3000) + 800,
-        type: "past",
-        milesRequested: false
-      };
-    }),
-
-    // Add "Miles Requested" flights as completed flights with special status
-    ...Array.from({ length: 10 }, (_, i) => {
-      const qualifyingMiles = Math.floor(Math.random() * 3000) + 800;
-      const serviceClass = Math.random() > 0.7 ? "Business" : Math.random() > 0.3 ? "Premium Economy" : "Economy";
-      const multiplier = serviceClass === 'Business' ? 1.45 : serviceClass === 'Premium Economy' ? 1.3 : 1.0;
-      const bonusMiles = Math.round(qualifyingMiles * multiplier);
-      
-      return {
-        id: `miles_requested_${i + 1}`,
-        flightNumber: `VN${1000 + i}`,
-        airline: "Vietnam Airlines",
-        from: { code: i % 2 === 0 ? "HAN" : "SGN", city: i % 2 === 0 ? "Hanoi" : "Ho Chi Minh City", country: "Vietnam" },
-        to: { code: i % 5 === 0 ? "BKK" : i % 5 === 1 ? "NRT" : i % 5 === 2 ? "SIN" : i % 5 === 3 ? "ICN" : "CDG", city: i % 5 === 0 ? "Bangkok" : i % 5 === 1 ? "Tokyo" : i % 5 === 2 ? "Singapore" : i % 5 === 3 ? "Seoul" : "Paris", country: i % 5 === 0 ? "Thailand" : i % 5 === 1 ? "Japan" : i % 5 === 2 ? "Singapore" : i % 5 === 3 ? "South Korea" : "France" },
-        departureDate: `2024-0${Math.floor(Math.random() * 8) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
-        departureTime: `${String(Math.floor(Math.random() * 16) + 6).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
-        arrivalDate: `2024-0${Math.floor(Math.random() * 8) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
-        arrivalTime: `${String(Math.floor(Math.random() * 16) + 8).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
-        duration: `${Math.floor(Math.random() * 6) + 2}h ${Math.floor(Math.random() * 60)}m`,
-        aircraft: Math.random() > 0.5 ? "Boeing 787" : "Airbus A321",
-        class: serviceClass,
-        seatNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 6))}${Math.floor(Math.random() * 30) + 1}`,
-        status: "Miles Requested",
-        bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-        eTicket: `2201234567${i + 300}`,
-        miles: qualifyingMiles,
-        bonusMiles: bonusMiles,
-        distance: Math.floor(Math.random() * 3000) + 800,
-        type: "past",
-        milesRequested: "pending" // Special status for pending miles requests
-      };
-    })
-  ];
-
   // Clear date filters
   const clearFilters = () => {
     setDateFilter({ from: "", to: "" });
   };
 
   // Filter functions with pagination
-  const getFilteredFlights = (type: string) => {
-    let filtered = allFlights.filter(flight => {
-      if (type === "upcoming") return flight.type === "upcoming";
-      if (type === "ongoing") return flight.type === "ongoing";
-      if (type === "past") return flight.type === "past";
-      if (type === "cancelled") return flight.type === "cancelled";
+  const getFilteredFlights = (status: string) => {
+    let filtered = flights.filter(flight => {
+      if (status === "upcoming") return flight.status === "upcoming";
+      if (status === "ongoing") return flight.status === "ongoing";
+      if (status === "past") return flight.status === "completed"; // Map 'past' tab to 'completed' status
+      if (status === "cancelled") return flight.status === "cancelled";
       return false;
     });
 
-    // Apply completed flight filter for past flights with new logic
-    if (type === "past") {
+    // Apply completed flight filter for past (completed) flights
+    if (status === "past") {
       if (completedFlightFilter === "not-requested") {
-        // Flights that haven't requested miles OR actual context flights that haven't been requested
-        filtered = filtered.filter(flight => 
-          flight.milesRequested === false || 
-          (!hasRequestForFlight(flight.flightNumber) && flight.milesRequested !== "pending")
-        );
+        filtered = filtered.filter(flight => flight.milesRequested === false || flight.milesRequested === undefined); // Adjusted for clarity
       } else if (completedFlightFilter === "requested") {
-        // Flights with pending miles requests OR flights that have been requested in context
-        filtered = filtered.filter(flight => 
-          flight.milesRequested === "pending" || 
-          flight.milesRequested === true ||
-          hasRequestForFlight(flight.flightNumber)
-        );
+        filtered = filtered.filter(flight => flight.milesRequested === "pending" || flight.milesRequested === true);
       }
-      // "all" shows all completed flights
     }
 
     // Apply date filter
@@ -389,7 +230,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
   };
 
   // Pagination logic
-  const getPagedFlights = (flights: any[]) => {
+  const getPagedFlights = (flights: Flight[]) => { // Use Flight[] type
     const totalPages = Math.ceil(flights.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -408,14 +249,45 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
   }, [selectedTab, completedFlightFilter, dateFilter]);
 
   // Handle request miles button click
-  const handleRequestMiles = (flight: any) => {
+  const handleRequestMiles = async (flight: Flight) => { // Use Flight type
     setSelectedFlight(flight);
     setShowEarnMilesDialog(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const seatClassChar = flight.seatNumber.charAt(0); // Assuming seatClass is the first character of seatNumber
+      const requestBody = {
+        distance: flight.distance,
+        seatClass: seatClassChar,
+        departureDate: flight.departureDate
+      };
+
+      const response = await fetch(`https://mileswise-be.onrender.com/api/member/calculate-miles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCalculatedMilesResult({ qualifyingMiles: data.totalMiles, bonusMiles: data.totalMiles });
+
+    } catch (e: any) {
+      toast.error(`Failed to calculate miles: ${e.message}`);
+      setCalculatedMilesResult(null);
+    }
   };
 
   // Handle earn miles submission
   const handleEarnMilesSubmit = () => {
-    if (selectedFlight) {
+    if (selectedFlight && calculatedMilesResult) {
+      // const { qualifyingMiles, bonusMiles } = calculateBonusMiles(selectedFlight.miles, selectedFlight.class);
       addRequest({
         flightNumber: selectedFlight.flightNumber,
         airline: selectedFlight.airline,
@@ -425,12 +297,15 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
         serviceClass: selectedFlight.class,
         seatClass: selectedFlight.seatNumber.charAt(selectedFlight.seatNumber.length - 1),
         distance: selectedFlight.distance,
-        calculatedMiles: selectedFlight.miles,
+        calculatedMiles: calculatedMilesResult.qualifyingMiles,
+        bonusMiles: calculatedMilesResult.bonusMiles,
         status: 'waiting to confirm' as const
       });
       toast.success("Miles request submitted successfully!");
       setShowEarnMilesDialog(false);
       setSelectedFlight(null);
+      setCalculatedMilesResult(null); // Clear calculated miles result
+      fetchFlights(); // Re-fetch flights to update status after request
     }
   };
 
@@ -478,7 +353,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
   };
 
   // Flight card component with new design (REMOVED BONUS MILES)
-  const FlightCard = ({ flight }: { flight: any }) => {
+  const FlightCard = ({ flight }: { flight: Flight }) => { // Use Flight type
     const milesRequested = hasRequestForFlight(flight.flightNumber) || flight.milesRequested === true || flight.milesRequested === "pending";
     const requestInfo = getRequestForFlight(flight.flightNumber);
     
@@ -500,14 +375,14 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                 flight.status === "Completed" ? "default" : 
                 flight.status === "Ongoing" ? "secondary" : 
                 flight.status === "Cancelled" ? "destructive" :
-                flight.status === "Miles Requested" ? "secondary" :
+                flight.status === "Miles Requested" ? "secondary" : // This status is for mock data, will be 'completed' from API
                 "outline"
               }
               className={
                 flight.status === "Completed" ? "bg-green-100 text-green-700" :
                 flight.status === "Ongoing" ? "bg-blue-100 text-blue-700" :
                 flight.status === "Cancelled" ? "bg-red-100 text-red-700" :
-                flight.status === "Miles Requested" ? "bg-yellow-100 text-yellow-700" :
+                flight.status === "Miles Requested" ? "bg-yellow-100 text-yellow-700" : // This status is for mock data, will be 'completed' from API
                 "bg-gray-100 text-gray-700"
               }
             >
@@ -573,7 +448,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
             </div>
           </div>
 
-          {flight.type === "past" && !milesRequested && (
+          {flight.status === "completed" && !milesRequested && (
             <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
               <p className="text-sm text-orange-800">
                 You can request miles for this completed flight.
@@ -581,7 +456,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
             </div>
           )}
 
-          {flight.type === "past" && flight.milesRequested === "pending" && (
+          {flight.status === "completed" && flight.milesRequested === "pending" && (
             <div className="mb-4 p-4 rounded-lg border-2 bg-yellow-50 border-yellow-200">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1">
@@ -606,7 +481,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
             </div>
           )}
 
-          {flight.type === "past" && milesRequested && requestInfo && (
+          {flight.status === "completed" && milesRequested && requestInfo && (
             <div className={`mb-4 p-4 rounded-lg border-2 ${
               requestInfo.status === 'approved' ? 'bg-green-50 border-green-200' :
               requestInfo.status === 'rejected' ? 'bg-red-50 border-red-200' :
@@ -656,7 +531,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
           )}
           
           <div className="flex items-center justify-between pt-4 border-t">
-            {flight.type === "past" && (
+            {flight.status === "completed" && (
               <>
                 {milesRequested && requestInfo ? (
                   <div className={`flex items-center ${
@@ -691,14 +566,14 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
               </>
             )}
 
-            {(flight.type === "upcoming" || flight.type === "ongoing") && (
+            {(flight.status === "upcoming" || flight.status === "ongoing") && (
               <Button variant="outline" size="sm">
                 <Download className="h-4 w-4 mr-2" />
                 Download E-Ticket
               </Button>
             )}
 
-            {flight.type === "cancelled" && (
+            {flight.status === "cancelled" && (
               <div className="flex items-center text-red-600">
                 <X className="h-4 w-4 mr-2" />
                 <span className="text-sm">Flight Cancelled</span>
@@ -808,59 +683,71 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
 
             {/* Flight Lists */}
             <TabsContent value="upcoming" className="mt-6">
-              {(() => {
-                const pagination = getPagedFlights(upcomingFlights);
-                return (
-                  <div className="space-y-4">
-                    {pagination.data.map((flight) => (
+              {loading && <div className="text-center text-blue-500">Loading upcoming flights...</div>}
+              {error && <div className="text-center text-red-500">Error: {error}</div>}
+              {!loading && !error && (
+                <div className="space-y-4">
+                  {upcomingFlights.length === 0 ? (
+                    <p className="text-center text-gray-500">No upcoming flights found.</p>
+                  ) : (
+                    upcomingFlights.map((flight) => (
                       <FlightCard key={flight.id} flight={flight} />
-                    ))}
-                    {renderPagination(pagination)}
-                  </div>
-                );
-              })()}
+                    ))
+                  )}
+                  {renderPagination(getPagedFlights(upcomingFlights))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="ongoing" className="mt-6">
-              {(() => {
-                const pagination = getPagedFlights(ongoingFlights);
-                return (
-                  <div className="space-y-4">
-                    {pagination.data.map((flight) => (
+              {loading && <div className="text-center text-blue-500">Loading ongoing flights...</div>}
+              {error && <div className="text-center text-red-500">Error: {error}</div>}
+              {!loading && !error && (
+                <div className="space-y-4">
+                  {ongoingFlights.length === 0 ? (
+                    <p className="text-center text-gray-500">No ongoing flights found.</p>
+                  ) : (
+                    ongoingFlights.map((flight) => (
                       <FlightCard key={flight.id} flight={flight} />
-                    ))}
-                    {renderPagination(pagination)}
-                  </div>
-                );
-              })()}
+                    ))
+                  )}
+                  {renderPagination(getPagedFlights(ongoingFlights))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="past" className="mt-6">
-              {(() => {
-                const pagination = getPagedFlights(pastFlights);
-                return (
-                  <div className="space-y-4">
-                    {pagination.data.map((flight) => (
+              {loading && <div className="text-center text-blue-500">Loading completed flights...</div>}
+              {error && <div className="text-center text-red-500">Error: {error}</div>}
+              {!loading && !error && (
+                <div className="space-y-4">
+                  {pastFlights.length === 0 ? (
+                    <p className="text-center text-gray-500">No completed flights found.</p>
+                  ) : (
+                    pastFlights.map((flight) => (
                       <FlightCard key={flight.id} flight={flight} />
-                    ))}
-                    {renderPagination(pagination)}
-                  </div>
-                );
-              })()}
+                    ))
+                  )}
+                  {renderPagination(getPagedFlights(pastFlights))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="cancelled" className="mt-6">
-              {(() => {
-                const pagination = getPagedFlights(cancelledFlights);
-                return (
-                  <div className="space-y-4">
-                    {pagination.data.map((flight) => (
+              {loading && <div className="text-center text-blue-500">Loading cancelled flights...</div>}
+              {error && <div className="text-center text-red-500">Error: {error}</div>}
+              {!loading && !error && (
+                <div className="space-y-4">
+                  {cancelledFlights.length === 0 ? (
+                    <p className="text-center text-gray-500">No cancelled flights found.</p>
+                  ) : (
+                    cancelledFlights.map((flight) => (
                       <FlightCard key={flight.id} flight={flight} />
-                    ))}
-                    {renderPagination(pagination)}
-                  </div>
-                );
-              })()}
+                    ))
+                  )}
+                  {renderPagination(getPagedFlights(cancelledFlights))}
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -926,7 +813,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                           <Award className="h-4 w-4 text-blue-500" />
                           <span className="font-medium text-gray-700">Base Qualifying Miles</span>
                         </div>
-                        <span className="font-bold text-blue-600">{calculation.qualifyingMiles.toLocaleString()}</span>
+                        <span className="font-bold text-blue-600">{calculatedMilesResult?.qualifyingMiles.toLocaleString() || 'N/A'}</span>
                       </div>
 
                       {/* Service Class Multiplier */}
@@ -942,11 +829,11 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                       <div className="p-3 bg-gray-50 rounded border border-dashed border-gray-300">
                         <div className="text-center text-sm text-gray-600 mb-2">Calculation Formula</div>
                         <div className="text-center font-mono text-sm">
-                          <span className="text-blue-600">{calculation.qualifyingMiles.toLocaleString()}</span>
+                          <span className="text-blue-600">{selectedFlight.miles.toLocaleString()}</span>
                           <span className="text-gray-500"> × </span>
                           <span className="text-yellow-600">{calculation.multiplier}</span>
                           <span className="text-gray-500"> = </span>
-                          <span className="text-green-600 font-bold">{calculation.bonusMiles.toLocaleString()}</span>
+                          <span className="text-green-600 font-bold">{calculatedMilesResult?.bonusMiles.toLocaleString() || 'N/A'}</span>
                         </div>
                       </div>
 
@@ -956,7 +843,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                           <TrendingUp className="h-5 w-5 text-green-600" />
                           <span className="font-bold text-green-800">Total Bonus Miles Earned</span>
                         </div>
-                        <span className="font-bold text-2xl text-green-600">{calculation.bonusMiles.toLocaleString()}</span>
+                        <span className="font-bold text-2xl text-green-600">{calculatedMilesResult?.bonusMiles.toLocaleString() || 'N/A'}</span>
                       </div>
 
                       {/* Miles Breakdown Summary */}
@@ -964,12 +851,12 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                         <div className="p-3 bg-blue-50 rounded border">
                           <div className="text-xs text-blue-600 mb-1">FOR TIER STATUS</div>
                           <div className="font-bold text-blue-800">Qualifying Miles</div>
-                          <div className="text-xl font-bold text-blue-600">{calculation.qualifyingMiles.toLocaleString()}</div>
+                          <div className="text-xl font-bold text-blue-600">{calculatedMilesResult?.qualifyingMiles.toLocaleString() || 'N/A'}</div>
                         </div>
                         <div className="p-3 bg-green-50 rounded border">
                           <div className="text-xs text-green-600 mb-1">FOR REDEMPTION</div>
                           <div className="font-bold text-green-800">Bonus Miles</div>
-                          <div className="text-xl font-bold text-green-600">{calculation.bonusMiles.toLocaleString()}</div>
+                          <div className="text-xl font-bold text-green-600">{calculatedMilesResult?.bonusMiles.toLocaleString() || 'N/A'}</div>
                         </div>
                       </div>
 
