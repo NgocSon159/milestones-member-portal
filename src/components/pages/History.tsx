@@ -1,25 +1,31 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "../ui/pagination";
 import { useEarnMiles } from "../EarnMilesContext";
+import { getMemberData } from "../shared/memberData";
 import { 
-  Search, 
-  Filter, 
-  Calendar,
-  Clock,
-  CheckCircle,
-  X,
-  AlertCircle,
-  Eye,
-  Award,
-  HourglassIcon,
+  CheckCircle, 
+  Clock, 
+  XCircle, 
+  AlertCircle, 
   Plane,
-  Info
+  Calendar,
+  Award,
+  Filter,
+  HourglassIcon,
+  X,
+  Info,
+  Eye,
+  Search,
+  Star,
+  TrendingUp
 } from "lucide-react";
 
 const getStatusIcon = (status: string) => {
@@ -49,16 +55,27 @@ const getStatusColor = (status: string) => {
 };
 
 export function History() {
+  const { requests } = useEarnMiles();
   const [selectedTab, setSelectedTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [dateFilter, setDateFilter] = useState({ from: "", to: "" });
   
-  const { requests: earnMilesRequests } = useEarnMiles();
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  
+  // Get member data for miles calculations
+  const memberData = getMemberData(requests);
+
+  // Reset pagination when tab or filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedTab, dateFilter, searchTerm]);
 
   // Convert earn miles requests to history format
-  const earnMilesHistory = earnMilesRequests.map(request => ({
+  const earnMilesHistory = requests.map(request => ({
     id: request.id,
     type: "Earn Miles Request",
     flightNumber: request.flightNumber,
@@ -136,6 +153,65 @@ export function History() {
     return matchesSearch;
   }).sort((a, b) => new Date(b.submittedDate).getTime() - new Date(a.submittedDate).getTime());
 
+  // Pagination logic
+  const getPagedRequests = (requests: any[]) => {
+    const totalPages = Math.ceil(requests.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    
+    return {
+      data: requests.slice(startIndex, endIndex),
+      totalPages,
+      currentPage,
+      totalItems: requests.length
+    };
+  };
+
+  const pagedRequests = getPagedRequests(filteredRequests);
+
+  // Render pagination component
+  const renderPagination = () => {
+    if (pagedRequests.totalPages <= 1) return null;
+
+    return (
+      <div className="mt-6">
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            
+            {Array.from({ length: pagedRequests.totalPages }, (_, i) => i + 1).map((page) => (
+              <PaginationItem key={page}>
+                <PaginationLink
+                  onClick={() => setCurrentPage(page)}
+                  isActive={currentPage === page}
+                  className="cursor-pointer"
+                >
+                  {page}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            
+            <PaginationItem>
+              <PaginationNext 
+                onClick={() => setCurrentPage(Math.min(pagedRequests.totalPages, currentPage + 1))}
+                className={currentPage === pagedRequests.totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+        
+        <div className="text-center mt-2 text-sm text-muted-foreground">
+          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, pagedRequests.totalItems)} of {pagedRequests.totalItems} requests
+        </div>
+      </div>
+    );
+  };
+
   const handleViewDetail = (request: any) => {
     setSelectedRequest(request);
     setShowDetailDialog(true);
@@ -175,8 +251,27 @@ export function History() {
                   <p className="text-sm font-medium">{request.earnMilesData.serviceClass} ({request.earnMilesData.seatClass})</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Miles Requested</p>
-                  <p className="text-sm font-medium text-green-600">{request.earnMilesData.calculatedMiles.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">Qualifying Miles</p>
+                  <p className="text-sm font-medium text-blue-600">{request.earnMilesData.calculatedMiles.toLocaleString()}</p>
+                </div>
+              </div>
+            )}
+            
+            {/* Bonus Miles Info for approved requests */}
+            {request.earnMilesData && request.status === 'approved' && (
+              <div className="grid grid-cols-2 gap-3 mb-3 p-3 bg-green-50 rounded-lg">
+                <div>
+                  <p className="text-xs text-gray-500">Bonus Miles Earned</p>
+                  <p className="text-sm font-medium text-green-600">{(request.earnMilesData.bonusMiles || request.earnMilesData.calculatedMiles).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Miles Multiplier</p>
+                  <p className="text-sm font-medium text-green-600">
+                    {request.earnMilesData.bonusMiles ? 
+                      `${((request.earnMilesData.bonusMiles / request.earnMilesData.calculatedMiles) || 1).toFixed(1)}x` : 
+                      '1.0x'
+                    }
+                  </p>
                 </div>
               </div>
             )}
@@ -244,6 +339,88 @@ export function History() {
         </div>
       </div>
 
+      {/* Miles Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        {/* Qualifying Miles Card */}
+        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center space-x-2">
+              <Award className="h-5 w-5 text-blue-600" />
+              <span className="text-blue-900">Qualifying Miles</span>
+            </CardTitle>
+            <p className="text-sm text-blue-700">Miles used for tier calculation from completed flights</p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="text-center">
+                <div className="text-4xl font-bold text-blue-600 mb-2">
+                  {memberData.totalQualifyingMiles.toLocaleString()}
+                </div>
+                <p className="text-sm text-blue-700">Total Qualifying Miles</p>
+                <p className="text-xs text-blue-600">From {memberData.completedFlightsCount} completed flights</p>
+              </div>
+              <div className="bg-white/50 rounded-lg p-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-blue-700">Current Tier:</span>
+                  <span className="font-semibold text-blue-900">{memberData.currentTier}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-blue-700">Next Tier:</span>
+                  <span className="font-semibold text-blue-900">{memberData.nextTier}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-blue-700">Miles Needed:</span>
+                  <span className="font-semibold text-purple-600">{memberData.milesToNextTier.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Total Bonus Miles Card */}
+        <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center space-x-2">
+              <Star className="h-5 w-5 text-green-600" />
+              <span className="text-green-900">Total Bonus Miles</span>
+            </CardTitle>
+            <p className="text-sm text-green-700">Miles earned for redemptions based on service class multipliers</p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="text-center">
+                <div className="text-4xl font-bold text-green-600 mb-2">
+                  {memberData.totalBonusMiles.toLocaleString()}
+                </div>
+                <p className="text-sm text-green-700">Total Bonus Miles</p>
+                <p className="text-xs text-green-600">Calculated using Vietnam Airlines service class multipliers</p>
+              </div>
+              <div className="bg-white/50 rounded-lg p-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-green-700">Available Miles:</span>
+                  <span className="font-semibold text-green-900">{memberData.currentAvailableMiles.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-green-700">Miles Redeemed:</span>
+                  <span className="font-semibold text-purple-600">{memberData.totalMilesRedeemed.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-green-700">Miles Expiring:</span>
+                  <span className="font-semibold text-red-600">{memberData.milesExpiringEndOfYear.toLocaleString()}</span>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-3 text-xs">
+                  <p className="text-blue-700 font-medium mb-1">Vietnam Airlines Miles Calculation:</p>
+                  <p className="text-blue-600">• Business Class: 1.4-1.5x multiplier</p>
+                  <p className="text-blue-600">• Premium Economy: 1.2-1.3x multiplier</p>
+                  <p className="text-blue-600">• Economy Class: 1.0x base rate</p>
+                  <p className="text-blue-600 mt-1">* Multipliers vary by booking class and route type</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Date Filter */}
       <Card>
         <CardHeader>
@@ -284,8 +461,8 @@ export function History() {
         </CardContent>
       </Card>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      {/* Request Status Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-blue-600">
@@ -318,14 +495,6 @@ export function History() {
             <p className="text-sm text-gray-600">Rejected Request</p>
           </CardContent>
         </Card>
-        <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">
-              {totalApprovedMiles.toLocaleString()}
-            </div>
-            <p className="text-sm text-green-700">Total Miles Earned</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Earn Miles Request Tabs */}
@@ -354,8 +523,8 @@ export function History() {
 
         <TabsContent value="all" className="space-y-4 mt-6">
           <div className="space-y-4">
-            {filteredRequests.length > 0 ? (
-              filteredRequests.map((request) => (
+            {pagedRequests.data.length > 0 ? (
+              pagedRequests.data.map((request) => (
                 <RequestCard key={request.id} request={request} />
               ))
             ) : (
@@ -368,12 +537,13 @@ export function History() {
               </Card>
             )}
           </div>
+          {renderPagination()}
         </TabsContent>
 
         <TabsContent value="waiting" className="space-y-4 mt-6">
           <div className="space-y-4">
-            {filteredRequests.length > 0 ? (
-              filteredRequests.map((request) => (
+            {pagedRequests.data.length > 0 ? (
+              pagedRequests.data.map((request) => (
                 <RequestCard key={request.id} request={request} />
               ))
             ) : (
@@ -386,12 +556,13 @@ export function History() {
               </Card>
             )}
           </div>
+          {renderPagination()}
         </TabsContent>
 
         <TabsContent value="approved" className="space-y-4 mt-6">
           <div className="space-y-4">
-            {filteredRequests.length > 0 ? (
-              filteredRequests.map((request) => (
+            {pagedRequests.data.length > 0 ? (
+              pagedRequests.data.map((request) => (
                 <RequestCard key={request.id} request={request} />
               ))
             ) : (
@@ -404,12 +575,13 @@ export function History() {
               </Card>
             )}
           </div>
+          {renderPagination()}
         </TabsContent>
 
         <TabsContent value="rejected" className="space-y-4 mt-6">
           <div className="space-y-4">
-            {filteredRequests.length > 0 ? (
-              filteredRequests.map((request) => (
+            {pagedRequests.data.length > 0 ? (
+              pagedRequests.data.map((request) => (
                 <RequestCard key={request.id} request={request} />
               ))
             ) : (
@@ -422,6 +594,7 @@ export function History() {
               </Card>
             )}
           </div>
+          {renderPagination()}
         </TabsContent>
       </Tabs>
 
@@ -506,9 +679,23 @@ export function History() {
                       <p className="font-medium">{selectedRequest.earnMilesData.distance} miles</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-500">Miles Requested</p>
-                      <p className="font-medium text-green-600">{selectedRequest.earnMilesData.calculatedMiles.toLocaleString()}</p>
+                      <p className="text-sm text-gray-500">Qualifying Miles</p>
+                      <p className="font-medium text-blue-600">{selectedRequest.earnMilesData.calculatedMiles.toLocaleString()}</p>
                     </div>
+                    {selectedRequest.earnMilesData.bonusMiles && (
+                      <div>
+                        <p className="text-sm text-gray-500">Bonus Miles</p>
+                        <p className="font-medium text-green-600">{selectedRequest.earnMilesData.bonusMiles.toLocaleString()}</p>
+                      </div>
+                    )}
+                    {selectedRequest.earnMilesData.bonusMiles && (
+                      <div>
+                        <p className="text-sm text-gray-500">Miles Multiplier</p>
+                        <p className="font-medium text-orange-600">
+                          {((selectedRequest.earnMilesData.bonusMiles / selectedRequest.earnMilesData.calculatedMiles) || 1).toFixed(1)}x
+                        </p>
+                      </div>
+                    )}
                   </div>
                   
                   {selectedRequest.earnMilesData.reason && (

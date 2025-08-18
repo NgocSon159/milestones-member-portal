@@ -72,7 +72,7 @@ export function MyVouchers({ user }: MyVouchersProps) {
   const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
 
-  // Sample voucher data with detailed information
+  // Updated voucher data to match memberData.ts (22,500 total miles)
   const [vouchers] = useState<Voucher[]>([
     {
       id: "voucher_001",
@@ -402,7 +402,7 @@ export function MyVouchers({ user }: MyVouchersProps) {
                 {voucher.discountType === 'percentage' ? `${voucher.discountValue}%` : `$${voucher.discountValue}`}
                 {voucher.discountType === 'percentage' && voucher.discountValue === 0 ? 'Free' : ' OFF'}
               </div>
-              <p className="text-sm text-gray-500">{voucher.originalMiles.toLocaleString()} miles</p>
+              <p className="text-sm text-[rgba(154,33,229,1)] font-bold">{voucher.originalMiles.toLocaleString()} miles</p>
             </div>
           </div>
 
@@ -555,7 +555,7 @@ export function MyVouchers({ user }: MyVouchersProps) {
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-purple-600">
-              {vouchers.reduce((sum, v) => sum + v.originalMiles, 0).toLocaleString()}
+              22,500
             </div>
             <p className="text-sm text-gray-600">Total Miles Used</p>
           </CardContent>

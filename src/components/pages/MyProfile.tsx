@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -43,17 +43,17 @@ export function MyProfile({ user, onLogout, onNameUpdate }: MyProfileProps) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const [profileData, setProfileData] = useState({
-    firstName: "",
+    firstName: "John",
     lastName: "",
     email: user.email,
-    phone: "",
-    address: "",
-    city: "",
-    country: "",
-    dateOfBirth: "",
-    memberSince: "",
-    tier: "",
-    memberNumber: ""
+    phone: "+84 901 234 567",
+    address: "123 Nguyen Hue Street, District 1",
+    city: "Ho Chi Minh City",
+    country: "Vietnam",
+    dateOfBirth: "1990-05-15",
+    memberSince: "2020-03-01",
+    tier: "Gold",
+    memberNumber: "VM123456789"
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -63,57 +63,6 @@ export function MyProfile({ user, onLogout, onNameUpdate }: MyProfileProps) {
   });
 
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
-
-  useEffect(() => {
-    const fetchProfileData = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        toast.error("No authentication token found. Please log in.");
-        if (onLogout) {
-          onLogout();
-        }
-        return;
-      }
-
-      try {
-        const response = await fetch("https://mileswise-be.onrender.com/api/member/profile", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setProfileData({
-            firstName: data.firstName || "",
-            lastName: data.lastName || "",
-            email: data.email || user.email,
-            phone: data.phone || "",
-            address: data.streetAddress || "",
-            city: data.city || "",
-            country: data.country || "",
-            dateOfBirth: data.dob ? new Date(data.dob).toISOString().split('T')[0] : "",
-            memberSince: data.memberSince ? new Date(data.memberSince).toISOString().split('T')[0] : "",
-            tier: data.tier || "Standard",
-            memberNumber: data.memberNumber || "N/A"
-          });
-        } else {
-          const errorData = await response.json();
-          toast.error(errorData.message || "Failed to fetch profile data.");
-          if (response.status === 401 && onLogout) { // Unauthorized
-            onLogout();
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching profile data:", error);
-        toast.error("An unexpected error occurred while fetching profile data.");
-      }
-    };
-
-    fetchProfileData();
-  }, [user.email, onLogout]);
 
   const handleSave = () => {
     setIsEditing(false);
@@ -130,8 +79,6 @@ export function MyProfile({ user, onLogout, onNameUpdate }: MyProfileProps) {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("id");
     if (onLogout) {
       onLogout();
     }
@@ -225,10 +172,10 @@ export function MyProfile({ user, onLogout, onNameUpdate }: MyProfileProps) {
                     {profileData.tier} Member
                   </Badge>
                   <span className="text-sm text-gray-500">
-                    Member since {profileData.memberSince ? new Date(profileData.memberSince).toLocaleDateString('en-US', { 
+                    Member since {new Date(profileData.memberSince).toLocaleDateString('en-US', { 
                       month: 'long', 
                       year: 'numeric' 
-                    }) : "N/A"}
+                    })}
                   </span>
                 </div>
               </div>
@@ -406,12 +353,12 @@ export function MyProfile({ user, onLogout, onNameUpdate }: MyProfileProps) {
             <div>
               <Label>Member Since</Label>
               <div className="p-3 bg-gray-50 rounded-lg">
-                {profileData.memberSince ? new Date(profileData.memberSince).toLocaleDateString('en-US', { 
+                {new Date(profileData.memberSince).toLocaleDateString('en-US', { 
                   weekday: 'long',
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric'
-                }) : "N/A"}
+                })}
               </div>
             </div>
           </CardContent>

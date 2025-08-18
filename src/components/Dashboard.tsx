@@ -30,12 +30,17 @@ const generateChartDataFromRequests = (requests: any[], memberData: any) => {
   const approvedRequests = requests.filter(request => request.status === 'approved');
   
   // Group requests by month and calculate actual earned miles
-  const monthlyData: { [key: string]: { earned: number, redeemed: number, expiring: number } } = {};
+  const monthlyData: { [key: string]: { 
+    qualifyingMiles: number, 
+    bonusMiles: number, 
+    redeemed: number, 
+    available: number 
+  } } = {};
   
   // Initialize months
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   months.forEach(month => {
-    monthlyData[month] = { earned: 0, redeemed: 0, expiring: 0 };
+    monthlyData[month] = { qualifyingMiles: 0, bonusMiles: 0, redeemed: 0, available: 0 };
   });
   
   // Process approved requests to get real earned miles per month
@@ -45,39 +50,41 @@ const generateChartDataFromRequests = (requests: any[], memberData: any) => {
     const monthName = months[monthIndex];
     
     if (monthlyData[monthName]) {
-      monthlyData[monthName].earned += request.calculatedMiles;
+      monthlyData[monthName].qualifyingMiles += request.calculatedMiles;
+      monthlyData[monthName].bonusMiles += (request.bonusMiles || request.calculatedMiles);
     }
   });
   
   // Get months that have earned miles
-  const activeMonths = months.filter(month => monthlyData[month].earned > 0);
+  const activeMonths = months.filter(month => monthlyData[month].qualifyingMiles > 0 || monthlyData[month].bonusMiles > 0);
   
-  // Distribute total redeemed and expiring across active months proportionally
-  const totalEarnedInChart = Object.values(monthlyData).reduce((sum, data) => sum + data.earned, 0);
+  // Distribute total redeemed, expiring, and available across active months proportionally
+  const totalQualifyingInChart = Object.values(monthlyData).reduce((sum, data) => sum + data.qualifyingMiles, 0);
+  const totalBonusInChart = Object.values(monthlyData).reduce((sum, data) => sum + data.bonusMiles, 0);
   
-  // If we have earned miles, distribute redeemed and expiring proportionally
-  if (totalEarnedInChart > 0 && activeMonths.length > 0) {
-    // Distribute miles redeemed across months
+  // If we have earned miles, distribute other metrics proportionally
+  if ((totalQualifyingInChart > 0 || totalBonusInChart > 0) && activeMonths.length > 0) {
+    // Distribute miles redeemed and available across months
     let remainingRedeemed = memberData.totalMilesRedeemed;
-    let remainingExpiring = memberData.milesExpiringEndOfYear;
+    let remainingAvailable = memberData.milesExpiringEndOfYear; // Using expiring miles as available miles
     
     activeMonths.forEach((month, index) => {
-      const monthEarned = monthlyData[month].earned;
-      const proportion = monthEarned / totalEarnedInChart;
+      const monthBonus = monthlyData[month].bonusMiles;
+      const proportion = totalBonusInChart > 0 ? monthBonus / totalBonusInChart : 1 / activeMonths.length;
       
       if (index === activeMonths.length - 1) {
         // Last month gets remaining to ensure exact total
         monthlyData[month].redeemed = remainingRedeemed;
-        monthlyData[month].expiring = remainingExpiring;
+        monthlyData[month].available = remainingAvailable;
       } else {
         const monthRedeemed = Math.floor(memberData.totalMilesRedeemed * proportion);
-        const monthExpiring = Math.floor(memberData.milesExpiringEndOfYear * proportion);
+        const monthAvailable = Math.floor(memberData.milesExpiringEndOfYear * proportion);
         
         monthlyData[month].redeemed = monthRedeemed;
-        monthlyData[month].expiring = monthExpiring;
+        monthlyData[month].available = monthAvailable;
         
         remainingRedeemed -= monthRedeemed;
-        remainingExpiring -= monthExpiring;
+        remainingAvailable -= monthAvailable;
       }
     });
   }
@@ -85,13 +92,15 @@ const generateChartDataFromRequests = (requests: any[], memberData: any) => {
   // Return only months with data or recent months for better visualization
   return months.map(month => ({
     month,
-    earned: monthlyData[month].earned,
+    qualifyingMiles: monthlyData[month].qualifyingMiles,
+    bonusMiles: monthlyData[month].bonusMiles,
     redeemed: monthlyData[month].redeemed,
-    expiring: monthlyData[month].expiring
+    available: monthlyData[month].available
   })).filter(data => 
-    data.earned > 0 || 
+    data.qualifyingMiles > 0 || 
+    data.bonusMiles > 0 ||
     data.redeemed > 0 || 
-    data.expiring > 0 || 
+    data.available > 0 ||
     ['Aug', 'Sep', 'Oct', 'Nov', 'Dec'].includes(data.month)
   );
 };
@@ -143,148 +152,173 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
     
     switch (metric) {
       case "total-miles":
-        // Link to History My Request (Approved Request tab)
+        // Link to History My Request (Approved Request tab) - Qualifying miles
         onPageChange("history", { tab: "approved", showTotalEarned: true });
+        break;
+      case "bonus-miles":
+        // Link to History My Request to show bonus miles breakdown
+        onPageChange("history", { tab: "approved", showBonusMiles: true });
         break;
       case "miles-redeemed":
         // Link to My Vouchers "Total Miles Used"
         onPageChange("my-vouchers", { section: "total-used" });
         break;
-      case "miles-expiring":
-        // Link to Redeem Voucher "Available Miles"
-        onPageChange("redeem", { section: "available-miles" });
+
+      case "available-miles":
+        // Link to Redeem Voucher for available bonus miles
+        onPageChange("redeem");
         break;
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Miles Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {/* Total Miles Earned This Year */}
-        <Card 
-          className="cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => handleMetricClick("total-miles")}
-        >
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-600">Total Miles Earned</span>
-              <TrendingUp className="h-4 w-4 text-green-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              <p className="text-2xl font-bold text-blue-600">{memberData.totalMilesEarned.toLocaleString()}</p>
-              <p className="text-xs text-gray-500">From approved requests</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Miles Redeemed */}
-        <Card 
-          className="cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => handleMetricClick("miles-redeemed")}
-        >
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-600">Miles Redeemed</span>
-              <Gift className="h-4 w-4 text-purple-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              <p className="text-2xl font-bold text-purple-600">{memberData.totalMilesRedeemed.toLocaleString()}</p>
-              <p className="text-xs text-gray-500">Total used for vouchers</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Miles Expiring by End of Year */}
-        <Card 
-          className="cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => handleMetricClick("miles-expiring")}
-        >
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-600">Miles Expiring</span>
-              <Clock className="h-4 w-4 text-red-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              <p className="text-2xl font-bold text-red-600">{memberData.milesExpiringEndOfYear.toLocaleString()}</p>
-              <p className="text-xs text-gray-500">By {memberData.expiringDate}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Current Tier (Based on Total Miles) */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-600">Member Status</span>
-              <TierIcon className={`h-4 w-4 ${tierInfo.color}`} />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              <p className={`text-2xl font-bold ${tierInfo.color}`}>{memberData.currentTier}</p>
-              <p className="text-xs text-gray-500">Current level</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Member Tier Progress */}
-      <Card className="mb-8">
+      {/* Member Tier Progress - Featured Section */}
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-100 border-2 border-blue-200">
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Trophy className="h-5 w-5 text-yellow-500" />
-            <span>Member Tier Progress</span>
+          <CardTitle className="flex items-center space-x-2 text-xl">
+            <Trophy className="h-6 w-6 text-yellow-500" />
+            <span className="text-blue-900">Member Tier Progress</span>
           </CardTitle>
+          <p className="text-sm text-blue-700">Track your journey to the next tier based on completed flights</p>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-8">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 rounded-full bg-gray-300"></div>
-                  <span className="text-sm text-gray-500">Silver</span>
-                  <span className="text-xs text-gray-400">(0 miles)</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                  <span className="text-sm font-medium text-yellow-600">Gold</span>
-                  <span className="text-xs text-gray-400">(25,000 miles)</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 rounded-full bg-gray-200 border-2 border-purple-300"></div>
-                  <span className="text-sm text-gray-600">Platinum</span>
-                  <span className="text-xs text-gray-400">(75,000 miles)</span>
+          <div className="space-y-6">
+            {/* Current Status */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center p-4 bg-white rounded-lg border">
+                <div className="text-3xl font-bold text-blue-600">{memberData.totalQualifyingMiles.toLocaleString()}</div>
+                <p className="text-sm text-gray-600">Qualifying Miles</p>
+                <p className="text-xs text-blue-500">Used for tier calculation</p>
+              </div>
+              <div className="text-center p-4 bg-white rounded-lg border">
+                <div className={`text-3xl font-bold ${tierInfo.color}`}>{memberData.currentTier}</div>
+                <p className="text-sm text-gray-600">Current Tier</p>
+                <div className="flex items-center justify-center mt-1">
+                  <TierIcon className={`h-5 w-5 ${tierInfo.color} mr-1`} />
+                  <span className="text-xs text-gray-500">Member Level</span>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-medium">{memberData.currentTierMiles.toLocaleString()} / {memberData.nextTierRequired.toLocaleString()}</p>
-                <p className="text-xs text-gray-500">Miles to {memberData.nextTier}</p>
+              <div className="text-center p-4 bg-white rounded-lg border">
+                <div className="text-3xl font-bold text-green-600">{memberData.totalBonusMiles.toLocaleString()}</div>
+                <p className="text-sm text-gray-600">Total Bonus Miles</p>
+                <p className="text-xs text-green-500">From completed flights</p>
               </div>
             </div>
-            <Progress value={memberData.progressPercentage} className="h-3" />
-            <p className="text-sm text-gray-600">
-              You need {(memberData.nextTierRequired - memberData.currentTierMiles).toLocaleString()} more miles to reach {memberData.nextTier} status.
-            </p>
+
+            {/* Tier Progress Visualization */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-8">
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-4 h-4 rounded-full ${memberData.totalMilesEarned >= 0 ? 'bg-gray-400' : 'bg-gray-200'}`}></div>
+                    <span className={`text-sm ${memberData.totalQualifyingMiles >= 0 ? 'font-medium text-gray-600' : 'text-gray-400'}`}>Silver</span>
+                    <span className="text-xs text-gray-400">(0 miles)</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-4 h-4 rounded-full ${memberData.totalMilesEarned >= 25000 ? 'bg-yellow-400' : 'bg-gray-200'}`}></div>
+                    <span className={`text-sm ${memberData.totalMilesEarned >= 25000 ? 'font-semibold text-yellow-600' : 'text-gray-400'}`}>Gold</span>
+                    <span className="text-xs text-gray-400">(25,000 miles)</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-4 h-4 rounded-full ${memberData.totalMilesEarned >= 75000 ? 'bg-purple-400' : 'bg-gray-200 border-2 border-purple-300'}`}></div>
+                    <span className={`text-sm ${memberData.totalMilesEarned >= 75000 ? 'font-semibold text-purple-600' : 'text-gray-600'}`}>Platinum</span>
+                    <span className="text-xs text-gray-400">(75,000 miles)</span>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">{memberData.totalQualifyingMiles.toLocaleString()} / {memberData.nextTierRequired.toLocaleString()} qualifying miles</span>
+                  <span className="text-sm font-medium text-blue-600">{Math.round((memberData.totalQualifyingMiles / memberData.nextTierRequired) * 100)}%</span>
+                </div>
+                <Progress value={(memberData.totalQualifyingMiles / memberData.nextTierRequired) * 100} className="h-3" />
+              </div>
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  <strong>Tier Calculation:</strong> Your member tier is determined by qualifying miles from completed flights. 
+                  Bonus miles are used for redemptions. You need {memberData.milesToNextTier.toLocaleString()} more qualifying miles to reach {memberData.nextTier} status.
+                </p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Miles Chart - Synchronized with exact totals */}
+      {/* Miles Chart with Overview Cards */}
       <Card className="mb-8">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <TrendingUp className="h-5 w-5 text-blue-500" />
             <span>Miles Activity Overview</span>
           </CardTitle>
+          <p className="text-sm text-gray-600">Track your qualifying miles, bonus miles, redemptions, and available miles for voucher redemption</p>
         </CardHeader>
         <CardContent>
+          {/* Miles Overview Cards - Above Chart */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {/* Qualifying Miles - Compact */}
+            <Card 
+              className="cursor-pointer hover:shadow-sm transition-shadow p-3 border-blue-200"
+              onClick={() => handleMetricClick("total-miles")}
+            >
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-1">
+                  <Award className="h-4 w-4 text-blue-500 mr-1" />
+                  <span className="text-xs font-medium text-gray-600">Qualifying</span>
+                </div>
+                <p className="text-lg font-bold text-blue-600">{memberData.totalQualifyingMiles.toLocaleString()}</p>
+                <p className="text-xs text-gray-500">For tier status</p>
+              </div>
+            </Card>
+
+            {/* Total Bonus Miles - Compact */}
+            <Card 
+              className="cursor-pointer hover:shadow-sm transition-shadow p-3 border-green-200"
+              onClick={() => handleMetricClick("bonus-miles")}
+            >
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-1">
+                  <Star className="h-4 w-4 text-green-500 mr-1" />
+                  <span className="text-xs font-medium text-gray-600">Bonus</span>
+                </div>
+                <p className="text-lg font-bold text-green-600">{memberData.totalBonusMiles.toLocaleString()}</p>
+                <p className="text-xs text-gray-500">For redemption</p>
+              </div>
+            </Card>
+
+            {/* Miles Redeemed - Compact */}
+            <Card 
+              className="cursor-pointer hover:shadow-sm transition-shadow p-3 border-purple-200"
+              onClick={() => handleMetricClick("miles-redeemed")}
+            >
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-1">
+                  <Gift className="h-4 w-4 text-purple-500 mr-1" />
+                  <span className="text-xs font-medium text-gray-600">Redeemed</span>
+                </div>
+                <p className="text-lg font-bold text-purple-600">{memberData.totalMilesRedeemed.toLocaleString()}</p>
+                <p className="text-xs text-gray-500">Used</p>
+              </div>
+            </Card>
+
+            {/* Available Miles - Compact - Match RedeemVoucher Display */}
+            <Card 
+              className="cursor-pointer hover:shadow-sm transition-shadow p-3 border-red-200"
+              onClick={() => handleMetricClick("available-miles")}
+            >
+              <div className="text-center">
+                <div className="flex items-center justify-center mb-1">
+                  <Gift className="h-4 w-4 text-red-500 mr-1" />
+                  <span className="text-xs font-medium text-gray-600">Available Miles</span>
+                </div>
+                <p className="text-lg font-bold text-red-600">{memberData.milesExpiringEndOfYear.toLocaleString()}</p>
+                <p className="text-xs text-red-500">Expiring this year</p>
+              </div>
+            </Card>
+          </div>
+
+          {/* Chart */}
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={milesChartData}>
@@ -298,10 +332,17 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
                 <Legend />
                 <Line 
                   type="monotone" 
-                  dataKey="earned" 
+                  dataKey="qualifyingMiles" 
                   stroke="#3B82F6" 
                   strokeWidth={3}
-                  name="Miles Earned"
+                  name="Qualifying Miles"
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="bonusMiles" 
+                  stroke="#10B981" 
+                  strokeWidth={3}
+                  name="Total Bonus Miles"
                 />
                 <Line 
                   type="monotone" 
@@ -312,33 +353,40 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
                 />
                 <Line 
                   type="monotone" 
-                  dataKey="expiring" 
+                  dataKey="available" 
                   stroke="#EF4444" 
                   strokeWidth={3}
-                  name="Miles Expiring"
+                  name="Available Miles"
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
-          {/* Add summary to verify totals */}
+
+          {/* Chart Summary to verify totals */}
           <div className="mt-4 pt-4 border-t">
-            <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
-                <p className="text-sm text-gray-500">Chart Total Earned</p>
+                <p className="text-sm text-gray-500">Chart Qualifying</p>
                 <p className="font-medium text-blue-600">
-                  {milesChartData.reduce((sum, data) => sum + data.earned, 0).toLocaleString()}
+                  {milesChartData.reduce((sum, data) => sum + data.qualifyingMiles, 0).toLocaleString()}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Chart Total Redeemed</p>
+                <p className="text-sm text-gray-500">Chart Bonus</p>
+                <p className="font-medium text-green-600">
+                  {milesChartData.reduce((sum, data) => sum + data.bonusMiles, 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Chart Redeemed</p>
                 <p className="font-medium text-purple-600">
                   {milesChartData.reduce((sum, data) => sum + data.redeemed, 0).toLocaleString()}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Chart Total Expiring</p>
+                <p className="text-sm text-gray-500">Chart Available</p>
                 <p className="font-medium text-red-600">
-                  {milesChartData.reduce((sum, data) => sum + data.expiring, 0).toLocaleString()}
+                  {milesChartData.reduce((sum, data) => sum + data.available, 0).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -387,49 +435,45 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
           </CardContent>
         </Card>
 
-        {/* Recent Activity - Updated with real data */}
+        {/* Recent Flight Activity */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center space-x-2">
-              <Clock className="h-5 w-5 text-green-500" />
-              <span>Recent Activity</span>
+              <Plane className="h-5 w-5 text-blue-500" />
+              <span>Recent Completed Flights</span>
             </CardTitle>
+            <p className="text-xs text-gray-500">Latest flights contributing to your tier status</p>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {/* Show latest approved requests */}
+              {/* Show latest approved flight requests */}
               {requests
                 .filter(request => request.status === 'approved')
-                .slice(0, 3)
+                .slice(0, 4)
                 .map((request, index) => (
-                  <div key={request.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div key={request.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
                     <div className="flex items-center space-x-3">
-                      <div className="p-1 bg-green-100 rounded-full">
-                        <TrendingUp className="h-3 w-3 text-green-600" />
+                      <div className="p-1 bg-blue-100 rounded-full">
+                        <Plane className="h-3 w-3 text-blue-600" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium">+{request.calculatedMiles.toLocaleString()} Miles Earned</p>
-                        <p className="text-xs text-gray-500">Flight {request.flightNumber}</p>
+                        <p className="text-sm font-medium">{request.from.split(' - ')[1]} → {request.to.split(' - ')[1]}</p>
+                        <p className="text-xs text-gray-500">Flight {request.flightNumber} • {request.serviceClass}</p>
                       </div>
                     </div>
-                    <span className="text-xs text-gray-500">
-                      {index === 0 ? '2 hours ago' : index === 1 ? '1 day ago' : '3 days ago'}
-                    </span>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-green-600">+{request.calculatedMiles.toLocaleString()}</p>
+                      <p className="text-xs text-gray-500">miles</p>
+                    </div>
                   </div>
                 ))}
               
-              {/* Add a redemption activity */}
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="p-1 bg-purple-100 rounded-full">
-                    <Gift className="h-3 w-3 text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">-15,000 Miles Redeemed</p>
-                    <p className="text-xs text-gray-500">Free ticket to Bangkok</p>
-                  </div>
+              {/* Summary */}
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-600">Total from {memberData.completedFlightsCount} flights</p>
+                  <p className="text-sm font-semibold text-blue-600">{memberData.totalQualifyingMiles.toLocaleString()} qualifying miles</p>
                 </div>
-                <span className="text-xs text-gray-500">5 days ago</span>
               </div>
             </div>
           </CardContent>

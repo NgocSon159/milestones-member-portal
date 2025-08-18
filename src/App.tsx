@@ -10,6 +10,7 @@ import { RedeemVoucher } from "./components/pages/RedeemVoucher";
 import { MyVouchers } from "./components/pages/MyVouchers";
 import { History } from "./components/pages/History";
 import { SupportChat } from "./components/pages/SupportChat";
+import { RewardDetails } from "./components/pages/RewardDetails";
 import { EarnMilesProvider } from "./components/EarnMilesContext";
 
 export default function App() {
@@ -52,13 +53,15 @@ export default function App() {
       case "notifications":
         return <Notifications user={user} memberName={memberName} />;
       case "redeem":
-        return <RedeemVoucher user={user} section={pageParams.section} />;
+        return <RedeemVoucher user={user} section={pageParams.section} onPageChange={handlePageChange} />;
       case "my-vouchers":
         return <MyVouchers user={user} />;
       case "history":
         return <History />;
       case "support":
         return <SupportChat />;
+      case "reward-details":
+        return <RewardDetails onPageChange={handlePageChange} />;
       default:
         return <Dashboard user={user} onPageChange={handlePageChange} />;
     }

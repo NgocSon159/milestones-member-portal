@@ -10,7 +10,8 @@ export interface EarnMilesRequest {
   serviceClass: string;
   seatClass: string;
   distance: number;
-  calculatedMiles: number;
+  calculatedMiles: number; // This is qualifying miles for tier calculation
+  bonusMiles: number; // This is bonus miles for redemption
   status: 'waiting to confirm' | 'approved' | 'rejected';
   submittedDate: string;
   processedDate?: string;
@@ -39,7 +40,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Business',
     seatClass: 'J',
     distance: 1166,
-    calculatedMiles: 2565,
+    calculatedMiles: 2565, // Qualifying miles
+    bonusMiles: 3500, // Bonus miles (higher for business class)
     status: 'approved',
     submittedDate: '2024-11-16',
     processedDate: '2024-11-17'
@@ -54,7 +56,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Economy',
     seatClass: 'Y',
     distance: 1166,
-    calculatedMiles: 1400,
+    calculatedMiles: 1400, // Qualifying miles
+    bonusMiles: 1400, // Bonus miles (same as economy)
     status: 'waiting to confirm',
     submittedDate: '2024-11-19'
   },
@@ -68,7 +71,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Economy',
     seatClass: 'Q',
     distance: 608,
-    calculatedMiles: 304,
+    calculatedMiles: 304, // Qualifying miles
+    bonusMiles: 304, // Bonus miles
     status: 'rejected',
     submittedDate: '2024-10-11',
     processedDate: '2024-10-12',
@@ -85,7 +89,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Business',
     seatClass: 'C',
     distance: 1245,
-    calculatedMiles: 2867,
+    calculatedMiles: 2867, // Qualifying miles
+    bonusMiles: 4200, // Bonus miles (1.47x for business)
     status: 'approved',
     submittedDate: '2024-10-26',
     processedDate: '2024-10-27'
@@ -100,7 +105,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Premium Economy',
     seatClass: 'W',
     distance: 1072,
-    calculatedMiles: 1608,
+    calculatedMiles: 1608, // Qualifying miles
+    bonusMiles: 2100, // Bonus miles (1.3x for premium economy)
     status: 'approved',
     submittedDate: '2024-10-21',
     processedDate: '2024-10-22'
@@ -115,7 +121,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Economy',
     seatClass: 'Y',
     distance: 2273,
-    calculatedMiles: 2273,
+    calculatedMiles: 2273, // Qualifying miles
+    bonusMiles: 2273, // Bonus miles (1x for economy)
     status: 'approved',
     submittedDate: '2024-10-16',
     processedDate: '2024-10-17'
@@ -130,7 +137,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Business',
     seatClass: 'J',
     distance: 2850,
-    calculatedMiles: 4275,
+    calculatedMiles: 4275, // Qualifying miles
+    bonusMiles: 6200, // Bonus miles (1.45x for business)
     status: 'approved',
     submittedDate: '2024-10-13',
     processedDate: '2024-10-14'
@@ -145,7 +153,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Economy',
     seatClass: 'H',
     distance: 1580,
-    calculatedMiles: 1580,
+    calculatedMiles: 1580, // Qualifying miles
+    bonusMiles: 1580, // Bonus miles (1x for economy)
     status: 'approved',
     submittedDate: '2024-10-09',
     processedDate: '2024-10-10'
@@ -160,7 +169,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Premium Economy',
     seatClass: 'E',
     distance: 230,
-    calculatedMiles: 287,
+    calculatedMiles: 287, // Qualifying miles
+    bonusMiles: 380, // Bonus miles (1.32x for premium economy)
     status: 'approved',
     submittedDate: '2024-10-06',
     processedDate: '2024-10-07'
@@ -175,7 +185,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Business',
     seatClass: 'D',
     distance: 8500,
-    calculatedMiles: 12750,
+    calculatedMiles: 12750, // Qualifying miles
+    bonusMiles: 18500, // Bonus miles (1.45x for business)
     status: 'approved',
     submittedDate: '2024-09-29',
     processedDate: '2024-09-30'
@@ -190,7 +201,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Economy',
     seatClass: 'V',
     distance: 615,
-    calculatedMiles: 615,
+    calculatedMiles: 615, // Qualifying miles
+    bonusMiles: 615, // Bonus miles (1x for economy)
     status: 'approved',
     submittedDate: '2024-09-26',
     processedDate: '2024-09-27'
@@ -205,7 +217,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Business',
     seatClass: 'I',
     distance: 7580,
-    calculatedMiles: 11370,
+    calculatedMiles: 11370, // Qualifying miles
+    bonusMiles: 16500, // Bonus miles (1.45x for business)
     status: 'approved',
     submittedDate: '2024-09-21',
     processedDate: '2024-09-22'
@@ -220,7 +233,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Economy',
     seatClass: 'B',
     distance: 450,
-    calculatedMiles: 450,
+    calculatedMiles: 450, // Qualifying miles
+    bonusMiles: 450, // Bonus miles (1x for economy)
     status: 'approved',
     submittedDate: '2024-09-16',
     processedDate: '2024-09-17'
@@ -235,7 +249,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Premium Economy',
     seatClass: 'W',
     distance: 8820,
-    calculatedMiles: 11025,
+    calculatedMiles: 11025, // Qualifying miles
+    bonusMiles: 14300, // Bonus miles (1.3x for premium economy)
     status: 'approved',
     submittedDate: '2024-09-11',
     processedDate: '2024-09-12'
@@ -250,7 +265,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Business',
     seatClass: 'O',
     distance: 1150,
-    calculatedMiles: 2645,
+    calculatedMiles: 2645, // Qualifying miles
+    bonusMiles: 3800, // Bonus miles (1.44x for business)
     status: 'approved',
     submittedDate: '2024-09-06',
     processedDate: '2024-09-07'
@@ -265,7 +281,8 @@ const initialRequests: EarnMilesRequest[] = [
     serviceClass: 'Economy',
     seatClass: 'M',
     distance: 1720,
-    calculatedMiles: 1720,
+    calculatedMiles: 1720, // Qualifying miles
+    bonusMiles: 1720, // Bonus miles (1x for economy)
     status: 'approved',
     submittedDate: '2024-08-31',
     processedDate: '2024-09-01'
@@ -280,9 +297,24 @@ export function EarnMilesProvider({ children }: { children: ReactNode }) {
       ...request,
       id: `req_${Date.now()}`,
       submittedDate: new Date().toISOString().split('T')[0],
-      status: 'waiting to confirm'
+      status: 'waiting to confirm',
+      // If bonusMiles not provided, calculate based on service class
+      bonusMiles: request.bonusMiles || calculateBonusMiles(request.calculatedMiles, request.serviceClass)
     };
     setRequests(prev => [...prev, newRequest]);
+  };
+
+  // Helper function to calculate bonus miles based on service class
+  const calculateBonusMiles = (qualifyingMiles: number, serviceClass: string): number => {
+    switch (serviceClass.toLowerCase()) {
+      case 'business':
+        return Math.round(qualifyingMiles * 1.45);
+      case 'premium economy':
+        return Math.round(qualifyingMiles * 1.3);
+      case 'economy':
+      default:
+        return qualifyingMiles;
+    }
   };
 
   const hasRequestForFlight = (flightNumber: string) => {

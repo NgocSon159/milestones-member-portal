@@ -8,8 +8,10 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Checkbox } from "../ui/checkbox";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "../ui/pagination";
 import { toast } from "sonner";
 import { useEarnMiles } from "../EarnMilesContext";
+import { getMemberData } from "../shared/memberData";
 import { 
   Plane, 
   Calendar,
@@ -29,38 +31,9 @@ import {
   Info,
   HourglassIcon,
   Filter,
-  Plus
+  Star,
+  TrendingUp
 } from "lucide-react";
-
-// Vietnam Airlines miles calculation structure
-const VN_MILES_STRUCTURE = {
-  "Economy": {
-    "Y": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "B": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "M": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "H": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "Q": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "V": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "W": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "S": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "T": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "L": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "K": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "G": { under300: 0.25, from300to600: 0.50, over600: 1.00 },
-    "N": { under300: 0.25, from300to600: 0.50, over600: 1.00 }
-  },
-  "Premium Economy": {
-    "W": { under300: 0.50, from300to600: 0.75, over600: 1.25 },
-    "E": { under300: 0.50, from300to600: 0.75, over600: 1.25 }
-  },
-  "Business": {
-    "J": { under300: 0.75, from300to600: 1.25, over600: 1.50 },
-    "C": { under300: 0.75, from300to600: 1.25, over600: 1.50 },
-    "D": { under300: 0.75, from300to600: 1.25, over600: 1.50 },
-    "I": { under300: 0.75, from300to600: 1.25, over600: 1.50 },
-    "O": { under300: 0.75, from300to600: 1.25, over600: 1.50 }
-  }
-};
 
 interface MyFlightsProps {
   onPageChange?: (page: string, params?: any) => void;
@@ -70,43 +43,70 @@ interface MyFlightsProps {
 
 export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter }: MyFlightsProps) {
   const [selectedTab, setSelectedTab] = useState(initialTab);
+  const [completedFlightFilter, setCompletedFlightFilter] = useState<"all" | "not-requested" | "requested">("all");
+  const [dateFilter, setDateFilter] = useState({ from: "", to: "" });
   const [showEarnMilesDialog, setShowEarnMilesDialog] = useState(false);
   const [selectedFlight, setSelectedFlight] = useState<any>(null);
-  const [completedFlightFilter, setCompletedFlightFilter] = useState<"all" | "not-sent" | "sent">(
-    initialFilter === "not-requested" ? "not-sent" : "all"
-  );
-  const [showTicketModal, setShowTicketModal] = useState(false);
-  const [selectedTicketFlight, setSelectedTicketFlight] = useState<any>(null);
-  const [dateFilter, setDateFilter] = useState({ from: "", to: "" });
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Set tab to completed if filter is specified
   useEffect(() => {
     if (initialFilter === "not-requested") {
       setSelectedTab("past");
+      setCompletedFlightFilter("not-requested");
+    } else if (initialFilter === "requested") {
+      setSelectedTab("past");
+      setCompletedFlightFilter("requested");
     }
   }, [initialFilter]);
   
-  const { addRequest, requests } = useEarnMiles();
+  const { addRequest, requests, hasRequestForFlight, getRequestForFlight } = useEarnMiles();
+  
+  // Get member data for miles calculations
+  const memberData = getMemberData(requests);
 
-  // Sample flight data with 50+ completed flights
+  // Calculate bonus miles based on service class
+  const calculateBonusMiles = (qualifyingMiles: number, serviceClass: string) => {
+    let multiplier = 1.0;
+    switch (serviceClass) {
+      case 'Business':
+        multiplier = 1.45;
+        break;
+      case 'Premium Economy':
+        multiplier = 1.3;
+        break;
+      case 'Economy':
+      default:
+        multiplier = 1.0;
+        break;
+    }
+    return {
+      qualifyingMiles,
+      multiplier,
+      bonusMiles: Math.round(qualifyingMiles * multiplier)
+    };
+  };
+
+  // Enhanced flight data with 10+ flights for each category
   const allFlights = [
-    // Existing flights
+    // UPCOMING FLIGHTS (12 flights)
     {
-      id: "1",
+      id: "upcoming_1",
       flightNumber: "VN204",
       airline: "Vietnam Airlines",
       from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
       to: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      departureDate: "2024-08-15",
+      departureDate: "2024-12-20",
       departureTime: "08:30",
-      arrivalDate: "2024-08-15",
+      arrivalDate: "2024-12-20",
       arrivalTime: "10:45",
       duration: "2h 15m",
       aircraft: "Airbus A321",
       class: "Business",
       seatNumber: "3A",
-      gate: "A12",
-      terminal: "T1",
       status: "Confirmed",
       bookingReference: "VN2X4Y",
       eTicket: "2201234567890",
@@ -115,1586 +115,379 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
       type: "upcoming"
     },
     {
-      id: "2", 
+      id: "upcoming_2",
       flightNumber: "VN548",
       airline: "Vietnam Airlines",
       from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
       to: { code: "NRT", city: "Tokyo", country: "Japan" },
-      departureDate: "2024-08-20",
+      departureDate: "2024-12-25",
       departureTime: "14:20",
-      arrivalDate: "2024-08-20",
+      arrivalDate: "2024-12-25",
       arrivalTime: "21:30",
       duration: "5h 10m",
       aircraft: "Boeing 787",
       class: "Economy",
       seatNumber: "28F",
-      gate: "B6",
-      terminal: "T1",
-      status: "Ongoing",
+      status: "Confirmed",
       bookingReference: "VN8K9L",
       eTicket: "2201234567891",
       miles: 2850,
       distance: 2850,
-      type: "ongoing"
+      type: "upcoming"
     },
+    ...Array.from({ length: 10 }, (_, i) => ({
+      id: `upcoming_${i + 3}`,
+      flightNumber: `VN${600 + i}`,
+      airline: "Vietnam Airlines",
+      from: { code: i % 2 === 0 ? "HAN" : "SGN", city: i % 2 === 0 ? "Hanoi" : "Ho Chi Minh City", country: "Vietnam" },
+      to: { code: i % 3 === 0 ? "BKK" : i % 3 === 1 ? "NRT" : "SIN", city: i % 3 === 0 ? "Bangkok" : i % 3 === 1 ? "Tokyo" : "Singapore", country: i % 3 === 0 ? "Thailand" : i % 3 === 1 ? "Japan" : "Singapore" },
+      departureDate: `2024-12-${String(Math.floor(Math.random() * 10) + 20).padStart(2, '0')}`,
+      departureTime: `${String(Math.floor(Math.random() * 12) + 6).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+      arrivalDate: `2024-12-${String(Math.floor(Math.random() * 10) + 20).padStart(2, '0')}`,
+      arrivalTime: `${String(Math.floor(Math.random() * 12) + 12).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+      duration: `${Math.floor(Math.random() * 4) + 2}h ${Math.floor(Math.random() * 60)}m`,
+      aircraft: Math.random() > 0.5 ? "Airbus A321" : "Boeing 787",
+      class: Math.random() > 0.7 ? "Business" : Math.random() > 0.3 ? "Premium Economy" : "Economy",
+      seatNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 6))}${Math.floor(Math.random() * 30) + 1}`,
+      status: "Confirmed",
+      bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+      eTicket: `220123456789${i + 20}`,
+      miles: Math.floor(Math.random() * 3000) + 500,
+      distance: Math.floor(Math.random() * 2000) + 600,
+      type: "upcoming"
+    })),
+    
+    // ONGOING FLIGHTS (11 flights)  
     {
-      id: "3",
-      flightNumber: "VN162",
-      airline: "Vietnam Airlines", 
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "BKK", city: "Bangkok", country: "Thailand" },
-      departureDate: "2024-07-25",
-      departureTime: "16:45",
-      arrivalDate: "2024-07-25",
-      arrivalTime: "18:30",
-      duration: "1h 45m",
-      aircraft: "Airbus A320",
-      class: "Economy",
-      seatNumber: "15C",
-      gate: "C3",
-      terminal: "T2",
-      status: "Completed",
-      bookingReference: "VN3M5N",
-      eTicket: "2201234567892",
-      miles: 450,
-      distance: 450,
-      type: "past"
-    },
-    {
-      id: "6",
+      id: "ongoing_1",
       flightNumber: "VN123",
       airline: "Vietnam Airlines",
       from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      departureDate: "2024-07-12",
-      departureTime: "08:00",
-      arrivalDate: "2024-07-12",
-      arrivalTime: "10:15",
-      duration: "2h 15m",
-      aircraft: "Airbus A321",
-      class: "Economy",
-      seatNumber: "22A",
-      gate: "A5",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN4G5H",
-      eTicket: "2201234567895",
-      miles: 675,
-      distance: 675,
-      type: "past"
-    },
-    {
-      id: "7",
-      flightNumber: "VN789",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "ICN", city: "Seoul", country: "South Korea" },
-      departureDate: "2024-06-28",
-      departureTime: "22:30",
-      arrivalDate: "2024-06-29",
-      arrivalTime: "05:45",
-      duration: "3h 15m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "4B",
-      gate: "B12",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN8J9K",
-      eTicket: "2201234567896",
-      miles: 2150,
-      distance: 1720,
-      type: "past"
-    },
-    {
-      id: "4",
-      flightNumber: "VN738",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "SIN", city: "Singapore", country: "Singapore" },
-      departureDate: "2024-07-18",
-      departureTime: "11:15",
-      arrivalDate: "2024-07-18", 
-      arrivalTime: "14:30",
-      duration: "2h 15m",
-      aircraft: "Airbus A321",
-      class: "Business",
-      seatNumber: "2D",
-      gate: "A8",
-      terminal: "T1",  
-      status: "Completed",
-      bookingReference: "VN7P8Q",
-      eTicket: "2201234567893",
-      miles: 1625,
-      distance: 1300,
-      type: "past"
-    },
-    {
-      id: "5",
-      flightNumber: "VN454",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
       to: { code: "CDG", city: "Paris", country: "France" },
-      departureDate: "2024-07-10",
-      departureTime: "23:55",
-      arrivalDate: "2024-07-11",
-      arrivalTime: "07:20",
-      duration: "12h 25m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy", 
-      seatNumber: "12A",
-      gate: "B15",
-      terminal: "T1",
-      status: "Cancelled",
-      bookingReference: "VN9R1S",
-      eTicket: "2201234567894",
-      miles: 0,
-      distance: 8500,
-      type: "cancelled"
-    },
-    // Adding 50 new completed flights
-    {
-      id: "8",
-      flightNumber: "VN301",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "KUL", city: "Kuala Lumpur", country: "Malaysia" },
-      departureDate: "2024-06-20",
-      departureTime: "09:15",
-      arrivalDate: "2024-06-20",
-      arrivalTime: "12:30",
-      duration: "2h 15m",
-      aircraft: "Airbus A320",
-      class: "Economy",
-      seatNumber: "18B",
-      gate: "B3",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN1A2B",
-      eTicket: "2201234567897",
-      miles: 1580,
-      distance: 1580,
-      type: "past"
-    },
-    {
-      id: "9",
-      flightNumber: "VN412",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "PNH", city: "Phnom Penh", country: "Cambodia" },
-      departureDate: "2024-06-15",
-      departureTime: "14:30",
-      arrivalDate: "2024-06-15",
-      arrivalTime: "16:15",
-      duration: "1h 45m",
-      aircraft: "Airbus A321",
-      class: "Premium Economy",
-      seatNumber: "8C",
-      gate: "A6",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN3C4D",
-      eTicket: "2201234567898",
-      miles: 287,
-      distance: 230,
-      type: "past"
-    },
-    {
-      id: "10",
-      flightNumber: "VN523",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "RGN", city: "Yangon", country: "Myanmar" },
-      departureDate: "2024-06-10",
-      departureTime: "11:45",
-      arrivalDate: "2024-06-10",
-      arrivalTime: "13:30",
-      duration: "1h 45m",
-      aircraft: "Airbus A320",
-      class: "Economy",
-      seatNumber: "25F",
-      gate: "C2",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN5E6F",
-      eTicket: "2201234567899",
-      miles: 615,
-      distance: 615,
-      type: "past"
-    },
-    {
-      id: "11",
-      flightNumber: "VN634",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "VTE", city: "Vientiane", country: "Laos" },
-      departureDate: "2024-06-05",
-      departureTime: "07:20",
-      arrivalDate: "2024-06-05",
-      arrivalTime: "08:45",
-      duration: "1h 25m",
-      aircraft: "ATR 72",
-      class: "Economy",
-      seatNumber: "12A",
-      gate: "D1",
-      terminal: "T2",
-      status: "Completed",
-      bookingReference: "VN7G8H",
-      eTicket: "2201234567900",
-      miles: 450,
-      distance: 450,
-      type: "past"
-    },
-    {
-      id: "12",
-      flightNumber: "VN745",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "MNL", city: "Manila", country: "Philippines" },
-      departureDate: "2024-05-30",
-      departureTime: "15:10",
-      arrivalDate: "2024-05-30",
-      arrivalTime: "18:25",
-      duration: "2h 15m",
-      aircraft: "Airbus A321",
-      class: "Business",
-      seatNumber: "1F",
-      gate: "A10",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN9I0J",
-      eTicket: "2201234567901",
-      miles: 2645,
-      distance: 1150,
-      type: "past"
-    },
-    {
-      id: "13",
-      flightNumber: "VN856",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "JKT", city: "Jakarta", country: "Indonesia" },
-      departureDate: "2024-05-25",
-      departureTime: "13:35",
-      arrivalDate: "2024-05-25",
-      arrivalTime: "17:20",
-      duration: "3h 45m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "32D",
-      gate: "B8",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN1K2L",
-      eTicket: "2201234567902",
-      miles: 1720,
-      distance: 1720,
-      type: "past"
-    },
-    {
-      id: "14",
-      flightNumber: "VN967",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "BKK", city: "Bangkok", country: "Thailand" },
-      departureDate: "2024-05-20",
-      departureTime: "18:40",
-      arrivalDate: "2024-05-20",
-      arrivalTime: "20:25",
-      duration: "1h 45m",
-      aircraft: "Airbus A320",
-      class: "Premium Economy",
-      seatNumber: "6B",
-      gate: "C4",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN3M4N",
-      eTicket: "2201234567903",
-      miles: 562,
-      distance: 450,
-      type: "past"
-    },
-    {
-      id: "15",
-      flightNumber: "VN078",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "SIN", city: "Singapore", country: "Singapore" },
-      departureDate: "2024-05-15",
-      departureTime: "06:50",
-      arrivalDate: "2024-05-15",
-      arrivalTime: "10:35",
-      duration: "3h 45m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "5A",
-      gate: "A14",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN5O6P",
-      eTicket: "2201234567904",
-      miles: 2430,
-      distance: 1620,
-      type: "past"
-    },
-    {
-      id: "16",
-      flightNumber: "VN189",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "ICN", city: "Seoul", country: "South Korea" },
-      departureDate: "2024-05-10",
-      departureTime: "23:15",
-      arrivalDate: "2024-05-11",
-      arrivalTime: "06:30",
-      duration: "3h 15m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "28C",
-      gate: "B12",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN7Q8R",
-      eTicket: "2201234567905",
-      miles: 2580,
-      distance: 2580,
-      type: "past"
-    },
-    {
-      id: "17",
-      flightNumber: "VN290",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "DAD", city: "Da Nang", country: "Vietnam" },
-      departureDate: "2024-05-05",
-      departureTime: "12:20",
-      arrivalDate: "2024-05-05",
-      arrivalTime: "13:45",
-      duration: "1h 25m",
-      aircraft: "Airbus A321",
-      class: "Economy",
-      seatNumber: "20E",
-      gate: "A3",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN9S0T",
-      eTicket: "2201234567906",
-      miles: 608,
-      distance: 608,
-      type: "past"
-    },
-    {
-      id: "18",
-      flightNumber: "VN401",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "NRT", city: "Tokyo", country: "Japan" },
-      departureDate: "2024-04-30",
-      departureTime: "01:25",
-      arrivalDate: "2024-04-30",
-      arrivalTime: "08:35",
-      duration: "5h 10m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "2B",
-      gate: "B6",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN1U2V",
-      eTicket: "2201234567907",
-      miles: 4275,
-      distance: 2850,
-      type: "past"
-    },
-    {
-      id: "19",
-      flightNumber: "VN512",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "BOM", city: "Mumbai", country: "India" },
-      departureDate: "2024-04-25",
-      departureTime: "16:40",
-      arrivalDate: "2024-04-25",
-      arrivalTime: "20:15",
-      duration: "4h 35m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "10C",
-      gate: "B10",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN3W4X",
-      eTicket: "2201234567908",
-      miles: 3375,
-      distance: 2700,
-      type: "past"
-    },
-    {
-      id: "20",
-      flightNumber: "VN623",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "SYD", city: "Sydney", country: "Australia" },
-      departureDate: "2024-04-20",
-      departureTime: "22:50",
-      arrivalDate: "2024-04-21",
-      arrivalTime: "09:15",
-      duration: "8h 25m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "1A",
-      gate: "A16",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN5Y6Z",
-      eTicket: "2201234567909",
-      miles: 11370,
-      distance: 7580,
-      type: "past"
-    },
-    {
-      id: "21",
-      flightNumber: "VN734",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "FRA", city: "Frankfurt", country: "Germany" },
-      departureDate: "2024-04-15",
-      departureTime: "00:45",
-      arrivalDate: "2024-04-15",
+      departureDate: "2024-08-15",
+      departureTime: "23:50",
+      arrivalDate: "2024-08-16",
       arrivalTime: "07:30",
-      duration: "12h 45m",
+      duration: "12h 40m",
       aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "14F",
-      gate: "B14",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN7A8B",
-      eTicket: "2201234567910",
-      miles: 11025,
-      distance: 8820,
-      type: "past"
-    },
-    {
-      id: "22",
-      flightNumber: "VN845",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "TPE", city: "Taipei", country: "Taiwan" },
-      departureDate: "2024-04-10",
-      departureTime: "19:30",
-      arrivalDate: "2024-04-10",
-      arrivalTime: "23:45",
-      duration: "2h 15m",
-      aircraft: "Airbus A321",
-      class: "Economy",
-      seatNumber: "26A",
-      gate: "C6",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN9C0D",
-      eTicket: "2201234567911",
-      miles: 1320,
-      distance: 1320,
-      type: "past"
-    },
-    {
-      id: "23",
-      flightNumber: "VN956",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "KMG", city: "Kunming", country: "China" },
-      departureDate: "2024-04-05",
-      departureTime: "08:15",
-      arrivalDate: "2024-04-05",
-      arrivalTime: "10:30",
-      duration: "1h 15m",
-      aircraft: "Airbus A320",
-      class: "Business",
-      seatNumber: "3C",
-      gate: "A8",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN1E2F",
-      eTicket: "2201234567912",
-      miles: 563,
-      distance: 375,
-      type: "past"
-    },
-    {
-      id: "24",
-      flightNumber: "VN067",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "CAN", city: "Guangzhou", country: "China" },
-      departureDate: "2024-03-30",
-      departureTime: "14:55",
-      arrivalDate: "2024-03-30",
-      arrivalTime: "18:10",
-      duration: "2h 15m",
-      aircraft: "Airbus A321",
-      class: "Economy",
-      seatNumber: "19D",
-      gate: "B4",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN3G4H",
-      eTicket: "2201234567913",
-      miles: 1050,
-      distance: 1050,
-      type: "past"
-    },
-    {
-      id: "25",
-      flightNumber: "VN178",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "NKG", city: "Nanjing", country: "China" },
-      departureDate: "2024-03-25",
-      departureTime: "20:40",
-      arrivalDate: "2024-03-26",
-      arrivalTime: "00:25",
-      duration: "2h 45m",
-      aircraft: "Airbus A321",
-      class: "Premium Economy",
-      seatNumber: "9B",
-      gate: "C8",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN5I6J",
-      eTicket: "2201234567914",
-      miles: 1969,
-      distance: 1575,
-      type: "past"
-    },
-    {
-      id: "26",
-      flightNumber: "VN289",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "BJS", city: "Beijing", country: "China" },
-      departureDate: "2024-03-20",
-      departureTime: "11:20",
-      arrivalDate: "2024-03-20",
-      arrivalTime: "16:45",
-      duration: "4h 25m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "4D",
-      gate: "A12",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN7K8L",
-      eTicket: "2201234567915",
-      miles: 3825,
-      distance: 2550,
-      type: "past"
-    },
-    {
-      id: "27",
-      flightNumber: "VN390",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "SHA", city: "Shanghai", country: "China" },
-      departureDate: "2024-03-15",
-      departureTime: "17:10",
-      arrivalDate: "2024-03-15",
-      arrivalTime: "21:35",
-      duration: "3h 25m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "31F",
-      gate: "B11",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN9M0N",
-      eTicket: "2201234567916",
-      miles: 1940,
-      distance: 1940,
-      type: "past"
-    },
-    {
-      id: "28",
-      flightNumber: "VN501",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "HKG", city: "Hong Kong", country: "Hong Kong" },
-      departureDate: "2024-03-10",
-      departureTime: "09:45",
-      arrivalDate: "2024-03-10",
-      arrivalTime: "13:20",
-      duration: "2h 35m",
-      aircraft: "Airbus A321",
       class: "Business",
       seatNumber: "2A",
-      gate: "A6",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN1O2P",
-      eTicket: "2201234567917",
-      miles: 2175,
-      distance: 1450,
-      type: "past"
+      status: "Ongoing",
+      bookingReference: "VN9M8N",
+      eTicket: "2201234567892",
+      miles: 8500,
+      distance: 8500,
+      type: "ongoing"
     },
-    {
-      id: "29",
-      flightNumber: "VN612",
+    ...Array.from({ length: 10 }, (_, i) => ({
+      id: `ongoing_${i + 2}`,
+      flightNumber: `VN${700 + i}`,
       airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "PUS", city: "Busan", country: "South Korea" },
-      departureDate: "2024-03-05",
-      departureTime: "13:30",
-      arrivalDate: "2024-03-05",
-      arrivalTime: "18:15",
-      duration: "2h 45m",
+      from: { code: i % 2 === 0 ? "HAN" : "SGN", city: i % 2 === 0 ? "Hanoi" : "Ho Chi Minh City", country: "Vietnam" },
+      to: { code: i % 4 === 0 ? "LHR" : i % 4 === 1 ? "CDG" : i % 4 === 2 ? "FRA" : "SYD", city: i % 4 === 0 ? "London" : i % 4 === 1 ? "Paris" : i % 4 === 2 ? "Frankfurt" : "Sydney", country: i % 4 === 0 ? "UK" : i % 4 === 1 ? "France" : i % 4 === 2 ? "Germany" : "Australia" },
+      departureDate: "2024-08-15",
+      departureTime: `${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+      arrivalDate: "2024-08-16",
+      arrivalTime: `${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+      duration: `${Math.floor(Math.random() * 8) + 6}h ${Math.floor(Math.random() * 60)}m`,
+      aircraft: Math.random() > 0.5 ? "Boeing 787" : "Airbus A350",
+      class: Math.random() > 0.6 ? "Business" : Math.random() > 0.2 ? "Premium Economy" : "Economy",
+      seatNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 6))}${Math.floor(Math.random() * 30) + 1}`,
+      status: "Ongoing",
+      bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+      eTicket: `220123456790${i + 30}`,
+      miles: Math.floor(Math.random() * 6000) + 2000,
+      distance: Math.floor(Math.random() * 6000) + 2000,
+      type: "ongoing"
+    })),
+
+    // CANCELLED FLIGHTS (11 flights)
+    {
+      id: "cancelled_1",
+      flightNumber: "VN999",
+      airline: "Vietnam Airlines", 
+      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
+      to: { code: "HAN", city: "Hanoi", country: "Vietnam" },
+      departureDate: "2024-07-15",
+      departureTime: "16:30",
+      arrivalDate: "2024-07-15", 
+      arrivalTime: "18:45",
+      duration: "2h 15m",
       aircraft: "Airbus A321",
       class: "Economy",
-      seatNumber: "24B",
-      gate: "C3",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN3Q4R",
-      eTicket: "2201234567918",
-      miles: 1980,
-      distance: 1980,
-      type: "past"
+      seatNumber: "12C",
+      status: "Cancelled",
+      bookingReference: "VN9M8N",
+      eTicket: "2201234567892",
+      miles: 1250,
+      distance: 750,
+      type: "cancelled"
     },
-    {
-      id: "30",
-      flightNumber: "VN723",
+    ...Array.from({ length: 10 }, (_, i) => ({
+      id: `cancelled_${i + 2}`,
+      flightNumber: `VN${800 + i}`,
       airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "OSA", city: "Osaka", country: "Japan" },
-      departureDate: "2024-02-28",
-      departureTime: "00:15",
-      arrivalDate: "2024-02-28",
-      arrivalTime: "07:30",
-      duration: "5h 15m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "11A",
-      gate: "B8",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN5S6T",
-      eTicket: "2201234567919",
-      miles: 3375,
-      distance: 2700,
-      type: "past"
-    },
-    {
-      id: "31",
-      flightNumber: "VN834",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "MEL", city: "Melbourne", country: "Australia" },
-      departureDate: "2024-02-25",
-      departureTime: "23:40",
-      arrivalDate: "2024-02-26",
-      arrivalTime: "13:55",
-      duration: "9h 15m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "6B",
-      gate: "A18",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN7U8V",
-      eTicket: "2201234567920",
-      miles: 12075,
-      distance: 8050,
-      type: "past"
-    },
-    {
-      id: "32",
-      flightNumber: "VN945",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "LHR", city: "London", country: "United Kingdom" },
-      departureDate: "2024-02-20",
-      departureTime: "01:20",
-      arrivalDate: "2024-02-20",
-      arrivalTime: "08:45",
-      duration: "13h 25m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "1D",
-      gate: "B16",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN9W0X",
-      eTicket: "2201234567921",
-      miles: 16650,
-      distance: 11100,
-      type: "past"
-    },
-    {
-      id: "33",
-      flightNumber: "VN056",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "LAX", city: "Los Angeles", country: "United States" },
-      departureDate: "2024-02-15",
-      departureTime: "14:30",
-      arrivalDate: "2024-02-15",
-      arrivalTime: "12:45",
-      duration: "15h 15m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "13C",
-      gate: "A20",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN1Y2Z",
-      eTicket: "2201234567922",
-      miles: 20250,
-      distance: 16200,
-      type: "past"
-    },
-    {
-      id: "34",
-      flightNumber: "VN167",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "JFK", city: "New York", country: "United States" },
-      departureDate: "2024-02-10",
-      departureTime: "02:15",
-      arrivalDate: "2024-02-10",
-      arrivalTime: "05:30",
-      duration: "18h 15m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "3B",
-      gate: "B18",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN3A4B",
-      eTicket: "2201234567923",
-      miles: 25875,
-      distance: 17250,
-      type: "past"
-    },
-    {
-      id: "35",
-      flightNumber: "VN278",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "YVR", city: "Vancouver", country: "Canada" },
-      departureDate: "2024-02-05",
-      departureTime: "15:45",
-      arrivalDate: "2024-02-05",
-      arrivalTime: "11:20",
-      duration: "14h 35m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "35E",
-      gate: "C12",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN5C6D",
-      eTicket: "2201234567924",
-      miles: 12600,
-      distance: 12600,
-      type: "past"
-    },
-    {
-      id: "36",
-      flightNumber: "VN389",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "DXB", city: "Dubai", country: "UAE" },
-      departureDate: "2024-01-30",
-      departureTime: "20:10",
-      arrivalDate: "2024-01-31",
-      arrivalTime: "01:25",
-      duration: "9h 15m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "2C",
-      gate: "A14",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN7E8F",
-      eTicket: "2201234567925",
-      miles: 9450,
-      distance: 6300,
-      type: "past"
-    },
-    {
-      id: "37",
-      flightNumber: "VN490",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "DOH", city: "Doha", country: "Qatar" },
-      departureDate: "2024-01-25",
-      departureTime: "03:40",
-      arrivalDate: "2024-01-25",
-      arrivalTime: "08:15",
-      duration: "8h 35m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "15D",
-      gate: "B12",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN9G0H",
-      eTicket: "2201234567926",
-      miles: 7875,
-      distance: 6300,
-      type: "past"
-    },
-    {
-      id: "38",
-      flightNumber: "VN601",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "IST", city: "Istanbul", country: "Turkey" },
-      departureDate: "2024-01-20",
-      departureTime: "12:25",
-      arrivalDate: "2024-01-20",
-      arrivalTime: "19:50",
-      duration: "11h 25m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "29A",
-      gate: "C10",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN1I2J",
-      eTicket: "2201234567927",
-      miles: 8400,
-      distance: 8400,
-      type: "past"
-    },
-    {
-      id: "39",
-      flightNumber: "VN712",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "ZUR", city: "Zurich", country: "Switzerland" },
-      departureDate: "2024-01-15",
-      departureTime: "00:50",
-      arrivalDate: "2024-01-15",
-      arrivalTime: "08:35",
-      duration: "13h 45m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "4A",
-      gate: "A16",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN3K4L",
-      eTicket: "2201234567928",
-      miles: 14175,
-      distance: 9450,
-      type: "past"
-    },
-    {
-      id: "40",
-      flightNumber: "VN823",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "CDG", city: "Paris", country: "France" },
-      departureDate: "2024-01-10",
-      departureTime: "21:35",
-      arrivalDate: "2024-01-11",
-      arrivalTime: "06:20",
-      duration: "14h 45m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "12B",
-      gate: "B14",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN5M6N",
-      eTicket: "2201234567929",
-      miles: 13125,
-      distance: 10500,
-      type: "past"
-    },
-    {
-      id: "41",
-      flightNumber: "VN934",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "FCO", city: "Rome", country: "Italy" },
-      departureDate: "2024-01-05",
-      departureTime: "16:15",
-      arrivalDate: "2024-01-06",
-      arrivalTime: "00:45",
-      duration: "14h 30m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "33C",
-      gate: "C14",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN7O8P",
-      eTicket: "2201234567930",
-      miles: 9720,
-      distance: 9720,
-      type: "past"
-    },
-    {
-      id: "42",
-      flightNumber: "VN045",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "AMS", city: "Amsterdam", country: "Netherlands" },
-      departureDate: "2023-12-30",
-      departureTime: "22:40",
-      arrivalDate: "2023-12-31",
-      arrivalTime: "07:15",
-      duration: "14h 35m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "1C",
-      gate: "A18",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN9Q0R",
-      eTicket: "2201234567931",
-      miles: 15750,
-      distance: 10500,
-      type: "past"
-    },
-    {
-      id: "43",
-      flightNumber: "VN156",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "ARN", city: "Stockholm", country: "Sweden" },
-      departureDate: "2023-12-25",
-      departureTime: "13:20",
-      arrivalDate: "2023-12-25",
-      arrivalTime: "21:45",
-      duration: "14h 25m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "16A",
-      gate: "B16",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN1S2T",
-      eTicket: "2201234567932",
-      miles: 11250,
-      distance: 9000,
-      type: "past"
-    },
-    {
-      id: "44",
-      flightNumber: "VN267",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "CPH", city: "Copenhagen", country: "Denmark" },
-      departureDate: "2023-12-20",
-      departureTime: "04:35",
-      arrivalDate: "2023-12-20",
-      arrivalTime: "13:50",
-      duration: "15h 15m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "27D",
-      gate: "C16",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN3U4V",
-      eTicket: "2201234567933",
-      miles: 9450,
-      distance: 9450,
-      type: "past"
-    },
-    {
-      id: "45",
-      flightNumber: "VN378",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "HEL", city: "Helsinki", country: "Finland" },
-      departureDate: "2023-12-15",
-      departureTime: "19:50",
-      arrivalDate: "2023-12-16",
-      arrivalTime: "03:25",
-      duration: "13h 35m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "5D",
-      gate: "A20",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN5W6X",
-      eTicket: "2201234567934",
-      miles: 11475,
-      distance: 7650,
-      type: "past"
-    },
-    {
-      id: "46",
-      flightNumber: "VN489",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "OSL", city: "Oslo", country: "Norway" },
-      departureDate: "2023-12-10",
-      departureTime: "08:15",
-      arrivalDate: "2023-12-10",
-      arrivalTime: "16:40",
-      duration: "14h 25m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "17B",
-      gate: "B18",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN7Y8Z",
-      eTicket: "2201234567935",
-      miles: 11813,
-      distance: 9450,
-      type: "past"
-    },
-    {
-      id: "47",
-      flightNumber: "VN590",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "WAW", city: "Warsaw", country: "Poland" },
-      departureDate: "2023-12-05",
-      departureTime: "14:45",
-      arrivalDate: "2023-12-05",
-      arrivalTime: "23:20",
-      duration: "12h 35m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "30F",
-      gate: "C18",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN9A0B",
-      eTicket: "2201234567936",
-      miles: 8100,
-      distance: 8100,
-      type: "past"
-    },
-    {
-      id: "48",
-      flightNumber: "VN601",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "PRG", city: "Prague", country: "Czech Republic" },
-      departureDate: "2023-11-30",
-      departureTime: "11:30",
-      arrivalDate: "2023-11-30",
-      arrivalTime: "20:15",
-      duration: "13h 45m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "2D",
-      gate: "A22",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN1C2D",
-      eTicket: "2201234567937",
-      miles: 13725,
-      distance: 9150,
-      type: "past"
-    },
-    {
-      id: "49",
-      flightNumber: "VN712",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "VIE", city: "Vienna", country: "Austria" },
-      departureDate: "2023-11-25",
-      departureTime: "17:20",
-      arrivalDate: "2023-11-26",
-      arrivalTime: "01:55",
-      duration: "12h 35m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "18C",
-      gate: "B20",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN3E4F",
-      eTicket: "2201234567938",
-      miles: 10125,
-      distance: 8100,
-      type: "past"
-    },
-    {
-      id: "50",
-      flightNumber: "VN823",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "MUC", city: "Munich", country: "Germany" },
-      departureDate: "2023-11-20",
-      departureTime: "23:45",
-      arrivalDate: "2023-11-21",
-      arrivalTime: "08:30",
-      duration: "14h 45m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "32A",
-      gate: "C20",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN5G6H",
-      eTicket: "2201234567939",
-      miles: 9900,
-      distance: 9900,
-      type: "past"
-    },
-    {
-      id: "51",
-      flightNumber: "VN934",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "BCN", city: "Barcelona", country: "Spain" },
-      departureDate: "2023-11-15",
-      departureTime: "06:10",
-      arrivalDate: "2023-11-15",
-      arrivalTime: "15:35",
-      duration: "15h 25m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "6A",
-      gate: "A24",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN7I8J",
-      eTicket: "2201234567940",
-      miles: 17100,
-      distance: 11400,
-      type: "past"
-    },
-    {
-      id: "52",
-      flightNumber: "VN045",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "MAD", city: "Madrid", country: "Spain" },
-      departureDate: "2023-11-10",
-      departureTime: "12:55",
-      arrivalDate: "2023-11-10",
-      arrivalTime: "22:40",
-      duration: "15h 45m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "19D",
-      gate: "B22",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN9K0L",
-      eTicket: "2201234567941",
-      miles: 16875,
-      distance: 13500,
-      type: "past"
-    },
-    {
-      id: "53",
-      flightNumber: "VN156",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "LIS", city: "Lisbon", country: "Portugal" },
-      departureDate: "2023-11-05",
-      departureTime: "20:25",
-      arrivalDate: "2023-11-06",
-      arrivalTime: "05:50",
-      duration: "15h 25m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "34B",
-      gate: "C22",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN1M2N",
-      eTicket: "2201234567942",
-      miles: 12150,
-      distance: 12150,
-      type: "past"
-    },
-    {
-      id: "54",
-      flightNumber: "VN267",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "ATH", city: "Athens", country: "Greece" },
-      departureDate: "2023-10-30",
-      departureTime: "15:40",
-      arrivalDate: "2023-10-31",
-      arrivalTime: "01:15",
-      duration: "13h 35m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "3A",
-      gate: "A26",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN3O4P",
-      eTicket: "2201234567943",
-      miles: 13275,
-      distance: 8850,
-      type: "past"
-    },
-    {
-      id: "55",
-      flightNumber: "VN378",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "BUD", city: "Budapest", country: "Hungary" },
-      departureDate: "2023-10-25",
-      departureTime: "09:30",
-      arrivalDate: "2023-10-25",
-      arrivalTime: "18:05",
-      duration: "12h 35m",
-      aircraft: "Boeing 787",
-      class: "Premium Economy",
-      seatNumber: "20F",
-      gate: "B24",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN5Q6R",
-      eTicket: "2201234567944",
-      miles: 10125,
-      distance: 8100,
-      type: "past"
-    },
-    {
-      id: "56",
-      flightNumber: "VN489",
-      airline: "Vietnam Airlines",
-      from: { code: "SGN", city: "Ho Chi Minh City", country: "Vietnam" },
-      to: { code: "BRU", city: "Brussels", country: "Belgium" },
-      departureDate: "2023-10-20",
-      departureTime: "01:15",
-      arrivalDate: "2023-10-20",
-      arrivalTime: "10:40",
-      duration: "15h 25m",
-      aircraft: "Boeing 787",
-      class: "Economy",
-      seatNumber: "28E",
-      gate: "C24",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN7S8T",
-      eTicket: "2201234567945",
-      miles: 10500,
-      distance: 10500,
-      type: "past"
-    },
-    {
-      id: "57",
-      flightNumber: "VN590",
-      airline: "Vietnam Airlines",
-      from: { code: "HAN", city: "Hanoi", country: "Vietnam" },
-      to: { code: "MXP", city: "Milan", country: "Italy" },
-      departureDate: "2023-10-15",
-      departureTime: "18:50",
-      arrivalDate: "2023-10-16",
-      arrivalTime: "03:25",
-      duration: "14h 35m",
-      aircraft: "Boeing 787",
-      class: "Business",
-      seatNumber: "4C",
-      gate: "A28",
-      terminal: "T1",
-      status: "Completed",
-      bookingReference: "VN9U0V",
-      eTicket: "2201234567946",
-      miles: 14175,
-      distance: 9450,
-      type: "past"
-    }
+      from: { code: i % 2 === 0 ? "HAN" : "SGN", city: i % 2 === 0 ? "Hanoi" : "Ho Chi Minh City", country: "Vietnam" },
+      to: { code: i % 3 === 0 ? "DAD" : i % 3 === 1 ? "CXR" : "BMV", city: i % 3 === 0 ? "Da Nang" : i % 3 === 1 ? "Cam Ranh" : "Buon Ma Thuot", country: "Vietnam" },
+      departureDate: `2024-0${Math.floor(Math.random() * 6) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+      departureTime: `${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+      arrivalDate: `2024-0${Math.floor(Math.random() * 6) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+      arrivalTime: `${String(Math.floor(Math.random() * 24)).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+      duration: `${Math.floor(Math.random() * 3) + 1}h ${Math.floor(Math.random() * 60)}m`,
+      aircraft: "Airbus A321",
+      class: Math.random() > 0.8 ? "Business" : Math.random() > 0.4 ? "Premium Economy" : "Economy",
+      seatNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 6))}${Math.floor(Math.random() * 30) + 1}`,
+      status: "Cancelled",
+      bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+      eTicket: `220123456791${i + 40}`,
+      miles: Math.floor(Math.random() * 1500) + 300,
+      distance: Math.floor(Math.random() * 1000) + 300,
+      type: "cancelled"
+    })),
+
+    // COMPLETED FLIGHTS - INCLUDING MILES REQUESTED FLIGHTS
+    // First, completed flights from EarnMilesContext
+    ...requests
+      .filter(req => req.status === 'approved')
+      .map((req, i) => ({
+        id: `past_${req.id}`,
+        flightNumber: req.flightNumber,
+        airline: req.airline,
+        from: { code: req.from.split(' - ')[0], city: req.from.split(' - ')[1], country: "Vietnam" },
+        to: { code: req.to.split(' - ')[0], city: req.to.split(' - ')[1], country: req.to.includes('Bangkok') ? 'Thailand' : req.to.includes('Tokyo') ? 'Japan' : req.to.includes('Singapore') ? 'Singapore' : req.to.includes('Seoul') ? 'South Korea' : req.to.includes('Paris') ? 'France' : req.to.includes('Sydney') ? 'Australia' : req.to.includes('Frankfurt') ? 'Germany' : req.to.includes('Manila') ? 'Philippines' : req.to.includes('Jakarta') ? 'Indonesia' : req.to.includes('Kuala Lumpur') ? 'Malaysia' : req.to.includes('Phnom Penh') ? 'Cambodia' : req.to.includes('Yangon') ? 'Myanmar' : req.to.includes('Vientiane') ? 'Laos' : "Vietnam" },
+        departureDate: req.departureDate,
+        departureTime: "10:00",
+        arrivalDate: req.departureDate,
+        arrivalTime: "12:15",
+        duration: "2h 15m",
+        aircraft: req.serviceClass === 'Business' ? "Boeing 787" : "Airbus A321",
+        class: req.serviceClass,
+        seatNumber: req.seatClass + Math.floor(Math.random() * 30 + 1),
+        status: "Completed",
+        bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+        eTicket: `2201234567${i + 100}`,
+        miles: req.calculatedMiles, // Qualifying miles
+        bonusMiles: req.bonusMiles || req.calculatedMiles, // Bonus miles
+        distance: req.distance,
+        type: "past",
+        milesRequested: true
+      })),
+    
+    // Add completed flights that haven't requested miles yet
+    ...Array.from({ length: 15 }, (_, i) => {
+      const qualifyingMiles = Math.floor(Math.random() * 4000) + 800;
+      const serviceClass = Math.random() > 0.7 ? "Business" : Math.random() > 0.3 ? "Premium Economy" : "Economy";
+      const multiplier = serviceClass === 'Business' ? 1.45 : serviceClass === 'Premium Economy' ? 1.3 : 1.0;
+      const bonusMiles = Math.round(qualifyingMiles * multiplier);
+      
+      return {
+        id: `past_extra_${i + 1}`,
+        flightNumber: `VN${900 + i}`,
+        airline: "Vietnam Airlines",
+        from: { code: i % 2 === 0 ? "HAN" : "SGN", city: i % 2 === 0 ? "Hanoi" : "Ho Chi Minh City", country: "Vietnam" },
+        to: { code: i % 5 === 0 ? "BKK" : i % 5 === 1 ? "NRT" : i % 5 === 2 ? "SIN" : i % 5 === 3 ? "ICN" : "KUL", city: i % 5 === 0 ? "Bangkok" : i % 5 === 1 ? "Tokyo" : i % 5 === 2 ? "Singapore" : i % 5 === 3 ? "Seoul" : "Kuala Lumpur", country: i % 5 === 0 ? "Thailand" : i % 5 === 1 ? "Japan" : i % 5 === 2 ? "Singapore" : i % 5 === 3 ? "South Korea" : "Malaysia" },
+        departureDate: `2024-0${Math.floor(Math.random() * 8) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+        departureTime: `${String(Math.floor(Math.random() * 16) + 6).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+        arrivalDate: `2024-0${Math.floor(Math.random() * 8) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+        arrivalTime: `${String(Math.floor(Math.random() * 16) + 8).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+        duration: `${Math.floor(Math.random() * 6) + 2}h ${Math.floor(Math.random() * 60)}m`,
+        aircraft: Math.random() > 0.5 ? "Boeing 787" : "Airbus A321",
+        class: serviceClass,
+        seatNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 6))}${Math.floor(Math.random() * 30) + 1}`,
+        status: "Completed",
+        bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+        eTicket: `2201234567${i + 200}`,
+        miles: qualifyingMiles, // Qualifying miles
+        bonusMiles: bonusMiles, // Bonus miles
+        distance: Math.floor(Math.random() * 3000) + 800,
+        type: "past",
+        milesRequested: false
+      };
+    }),
+
+    // Add "Miles Requested" flights as completed flights with special status
+    ...Array.from({ length: 10 }, (_, i) => {
+      const qualifyingMiles = Math.floor(Math.random() * 3000) + 800;
+      const serviceClass = Math.random() > 0.7 ? "Business" : Math.random() > 0.3 ? "Premium Economy" : "Economy";
+      const multiplier = serviceClass === 'Business' ? 1.45 : serviceClass === 'Premium Economy' ? 1.3 : 1.0;
+      const bonusMiles = Math.round(qualifyingMiles * multiplier);
+      
+      return {
+        id: `miles_requested_${i + 1}`,
+        flightNumber: `VN${1000 + i}`,
+        airline: "Vietnam Airlines",
+        from: { code: i % 2 === 0 ? "HAN" : "SGN", city: i % 2 === 0 ? "Hanoi" : "Ho Chi Minh City", country: "Vietnam" },
+        to: { code: i % 5 === 0 ? "BKK" : i % 5 === 1 ? "NRT" : i % 5 === 2 ? "SIN" : i % 5 === 3 ? "ICN" : "CDG", city: i % 5 === 0 ? "Bangkok" : i % 5 === 1 ? "Tokyo" : i % 5 === 2 ? "Singapore" : i % 5 === 3 ? "Seoul" : "Paris", country: i % 5 === 0 ? "Thailand" : i % 5 === 1 ? "Japan" : i % 5 === 2 ? "Singapore" : i % 5 === 3 ? "South Korea" : "France" },
+        departureDate: `2024-0${Math.floor(Math.random() * 8) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+        departureTime: `${String(Math.floor(Math.random() * 16) + 6).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+        arrivalDate: `2024-0${Math.floor(Math.random() * 8) + 1}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+        arrivalTime: `${String(Math.floor(Math.random() * 16) + 8).padStart(2, '0')}:${Math.random() > 0.5 ? '30' : '00'}`,
+        duration: `${Math.floor(Math.random() * 6) + 2}h ${Math.floor(Math.random() * 60)}m`,
+        aircraft: Math.random() > 0.5 ? "Boeing 787" : "Airbus A321",
+        class: serviceClass,
+        seatNumber: `${String.fromCharCode(65 + Math.floor(Math.random() * 6))}${Math.floor(Math.random() * 30) + 1}`,
+        status: "Miles Requested",
+        bookingReference: `VN${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+        eTicket: `2201234567${i + 300}`,
+        miles: qualifyingMiles,
+        bonusMiles: bonusMiles,
+        distance: Math.floor(Math.random() * 3000) + 800,
+        type: "past",
+        milesRequested: "pending" // Special status for pending miles requests
+      };
+    })
   ];
 
-  // Filter flights by date range
-  const filterFlightsByDate = (flights: any[]) => {
-    if (!dateFilter.from && !dateFilter.to) return flights;
-    
-    return flights.filter(flight => {
-      const flightDate = new Date(flight.departureDate);
-      const fromDate = dateFilter.from ? new Date(dateFilter.from) : null;
-      const toDate = dateFilter.to ? new Date(dateFilter.to) : null;
-      
-      if (fromDate && toDate) {
-        return flightDate >= fromDate && flightDate <= toDate;
-      } else if (fromDate) {
-        return flightDate >= fromDate;
-      } else if (toDate) {
-        return flightDate <= toDate;
-      }
-      
-      return true;
+  // Clear date filters
+  const clearFilters = () => {
+    setDateFilter({ from: "", to: "" });
+  };
+
+  // Filter functions with pagination
+  const getFilteredFlights = (type: string) => {
+    let filtered = allFlights.filter(flight => {
+      if (type === "upcoming") return flight.type === "upcoming";
+      if (type === "ongoing") return flight.type === "ongoing";
+      if (type === "past") return flight.type === "past";
+      if (type === "cancelled") return flight.type === "cancelled";
+      return false;
     });
-  };
 
-  // Separate flights by type
-  const upcomingFlights = filterFlightsByDate(allFlights.filter(flight => flight.type === "upcoming"));
-  const ongoingFlights = filterFlightsByDate(allFlights.filter(flight => flight.type === "ongoing"));
-  const pastFlights = filterFlightsByDate(allFlights.filter(flight => flight.type === "past"));
-  const cancelledFlights = filterFlightsByDate(allFlights.filter(flight => flight.type === "cancelled"));
-
-  // Filter completed flights based on filter selection
-  const getFilteredCompletedFlights = () => {
-    switch (completedFlightFilter) {
-      case "not-sent":
-        return pastFlights.filter(flight => !requests.some(req => req.flightNumber === flight.flightNumber));
-      case "sent":
-        return pastFlights.filter(flight => requests.some(req => req.flightNumber === flight.flightNumber));
-      default:
-        return pastFlights;
-    }
-  };
-
-  // Earn Miles Form State
-  const [earnMilesForm, setEarnMilesForm] = useState({
-    flightNumber: "",
-    airline: "",
-    from: "",
-    to: "",
-    departureDate: "",
-    serviceClass: "",
-    seatClass: "",
-    distance: "",
-    calculatedMiles: 0,
-    calculationDetails: {
-      baseMiles: 0,
-      multiplier: 0,
-      distanceCategory: ""
-    }
-  });
-
-  const getSeatClassOptions = (serviceClass: string) => {
-    switch (serviceClass) {
-      case "Business":
-        return ["J", "C", "D", "I", "O"];
-      case "Premium Economy":
-        return ["W", "E"];
-      case "Economy":
-        return ["Y", "B", "M", "H", "Q", "V", "W", "S", "T", "L", "K", "G", "N"];
-      default:
-        return [];
-    }
-  };
-
-  const calculateMiles = () => {
-    const { serviceClass, seatClass, distance } = earnMilesForm;
-    
-    if (!serviceClass || !seatClass || !distance) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
-    const distanceNum = parseInt(distance);
-    const serviceStructure = VN_MILES_STRUCTURE[serviceClass as keyof typeof VN_MILES_STRUCTURE];
-    const seatStructure = serviceStructure[seatClass as keyof typeof serviceStructure];
-    
-    let multiplier = 0;
-    let distanceCategory = "";
-    
-    if (distanceNum < 300) {
-      multiplier = seatStructure.under300;
-      distanceCategory = "Under 300 miles";
-    } else if (distanceNum >= 300 && distanceNum < 600) {
-      multiplier = seatStructure.from300to600;
-      distanceCategory = "300-600 miles";
-    } else {
-      multiplier = seatStructure.over600;
-      distanceCategory = "600+ miles";
-    }
-
-    const calculatedMiles = Math.round(distanceNum * multiplier);
-
-    setEarnMilesForm(prev => ({
-      ...prev,
-      calculatedMiles,
-      calculationDetails: {
-        baseMiles: distanceNum,
-        multiplier,
-        distanceCategory
+    // Apply completed flight filter for past flights with new logic
+    if (type === "past") {
+      if (completedFlightFilter === "not-requested") {
+        // Flights that haven't requested miles OR actual context flights that haven't been requested
+        filtered = filtered.filter(flight => 
+          flight.milesRequested === false || 
+          (!hasRequestForFlight(flight.flightNumber) && flight.milesRequested !== "pending")
+        );
+      } else if (completedFlightFilter === "requested") {
+        // Flights with pending miles requests OR flights that have been requested in context
+        filtered = filtered.filter(flight => 
+          flight.milesRequested === "pending" || 
+          flight.milesRequested === true ||
+          hasRequestForFlight(flight.flightNumber)
+        );
       }
-    }));
+      // "all" shows all completed flights
+    }
 
-    toast.success(`Calculated ${calculatedMiles.toLocaleString()} miles!`);
+    // Apply date filter
+    if (dateFilter.from || dateFilter.to) {
+      filtered = filtered.filter(flight => {
+        const flightDate = new Date(flight.departureDate);
+        const fromDate = dateFilter.from ? new Date(dateFilter.from) : null;
+        const toDate = dateFilter.to ? new Date(dateFilter.to) : null;
+        
+        if (fromDate && flightDate < fromDate) return false;
+        if (toDate && flightDate > toDate) return false;
+        return true;
+      });
+    }
+
+    return filtered;
   };
 
-  const handleEarnMilesClick = (flight: any) => {
+  // Pagination logic
+  const getPagedFlights = (flights: any[]) => {
+    const totalPages = Math.ceil(flights.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    
+    return {
+      data: flights.slice(startIndex, endIndex),
+      totalPages,
+      currentPage,
+      totalItems: flights.length
+    };
+  };
+
+  // Reset pagination when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedTab, completedFlightFilter, dateFilter]);
+
+  // Handle request miles button click
+  const handleRequestMiles = (flight: any) => {
     setSelectedFlight(flight);
-    setEarnMilesForm({
-      flightNumber: flight.flightNumber,
-      airline: flight.airline,
-      from: `${flight.from.code} - ${flight.from.city}`,
-      to: `${flight.to.code} - ${flight.to.city}`,
-      departureDate: flight.departureDate,
-      serviceClass: flight.class === "Business" ? "Business" : flight.class === "Premium Economy" ? "Premium Economy" : "Economy",
-      seatClass: "",
-      distance: flight.distance.toString(),
-      calculatedMiles: 0,
-      calculationDetails: {
-        baseMiles: 0,
-        multiplier: 0,
-        distanceCategory: ""
-      }
-    });
     setShowEarnMilesDialog(true);
   };
 
-  const handleSubmitEarnMiles = () => {
-    if (!earnMilesForm.calculatedMiles) {
-      toast.error("Please calculate miles first");
-      return;
-    }
-
-    const newRequest = {
-      id: `REQ${Date.now()}`,
-      flightNumber: earnMilesForm.flightNumber,
-      airline: earnMilesForm.airline,
-      from: earnMilesForm.from,
-      to: earnMilesForm.to,
-      departureDate: earnMilesForm.departureDate,
-      serviceClass: earnMilesForm.serviceClass,
-      seatClass: earnMilesForm.seatClass,
-      distance: parseInt(earnMilesForm.distance),
-      calculatedMiles: earnMilesForm.calculatedMiles,
-      submittedDate: new Date().toISOString().split('T')[0],
-      status: "waiting to confirm" as const
-    };
-
-    addRequest(newRequest);
-    
-    toast.success(`Miles request submitted successfully! Request ID: ${newRequest.id}`);
-    setShowEarnMilesDialog(false);
-    handleCancelEarnMiles();
-  };
-
-  const handleCancelEarnMiles = () => {
-    setSelectedFlight(null);
-    setEarnMilesForm({
-      flightNumber: "",
-      airline: "",
-      from: "",
-      to: "",
-      departureDate: "",
-      serviceClass: "",
-      seatClass: "",
-      distance: "",
-      calculatedMiles: 0,
-      calculationDetails: {
-        baseMiles: 0,
-        multiplier: 0,
-        distanceCategory: ""
-      }
-    });
-  };
-
-  const handleDownloadTicket = (flight: any) => {
-    setSelectedTicketFlight(flight);
-    setShowTicketModal(true);
-  };
-
-  const handleCloseTicketModal = () => {
-    setShowTicketModal(false);
-    setSelectedTicketFlight(null);
-  };
-
-  const handleDownloadTicketFile = () => {
-    // Create a simple ticket content for download
-    const ticketContent = `
-VIETNAM AIRLINES E-TICKET
-=========================
-
-Flight: ${selectedTicketFlight?.flightNumber}
-From: ${selectedTicketFlight?.from.code} - ${selectedTicketFlight?.from.city}
-To: ${selectedTicketFlight?.to.code} - ${selectedTicketFlight?.to.city}
-Date: ${selectedTicketFlight?.departureDate}
-Time: ${selectedTicketFlight?.departureTime}
-Seat: ${selectedTicketFlight?.seatNumber}
-Class: ${selectedTicketFlight?.class}
-Booking Reference: ${selectedTicketFlight?.bookingReference}
-E-Ticket: ${selectedTicketFlight?.eTicket}
-
-Thank you for choosing Vietnam Airlines!
-    `;
-    
-    const blob = new Blob([ticketContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `VN-Ticket-${selectedTicketFlight?.flightNumber}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    
-    toast.success("Ticket downloaded successfully!");
-  };
-
-  const getFlightStatus = (flight: any) => {
-    switch (flight.status) {
-      case "Confirmed":
-        return <Badge className="bg-green-100 text-green-700">Confirmed</Badge>;
-      case "Scheduled":
-        return <Badge className="bg-blue-100 text-blue-700">Scheduled</Badge>;
-      case "Ongoing":
-        return <Badge className="bg-purple-100 text-purple-700">Ongoing</Badge>;
-      case "Completed":
-        return <Badge className="bg-gray-100 text-gray-700">Completed</Badge>;
-      case "Cancelled":
-        return <Badge className="bg-red-100 text-red-700">Cancelled</Badge>;
-      default:
-        return <Badge className="bg-gray-100 text-gray-700">{flight.status}</Badge>;
+  // Handle earn miles submission
+  const handleEarnMilesSubmit = () => {
+    if (selectedFlight) {
+      addRequest({
+        flightNumber: selectedFlight.flightNumber,
+        airline: selectedFlight.airline,
+        from: `${selectedFlight.from.code} - ${selectedFlight.from.city}`,
+        to: `${selectedFlight.to.code} - ${selectedFlight.to.city}`,
+        departureDate: selectedFlight.departureDate,
+        serviceClass: selectedFlight.class,
+        seatClass: selectedFlight.seatNumber.charAt(selectedFlight.seatNumber.length - 1),
+        distance: selectedFlight.distance,
+        calculatedMiles: selectedFlight.miles,
+        status: 'waiting to confirm' as const
+      });
+      toast.success("Miles request submitted successfully!");
+      setShowEarnMilesDialog(false);
+      setSelectedFlight(null);
     }
   };
 
-  const getEarnMilesButtonState = (flight: any) => {
-    const request = requests.find(req => req.flightNumber === flight.flightNumber);
-    if (!request) {
-      return {
-        text: "Request Earn Miles Now",
-        variant: "default" as const,
-        disabled: false,
-        icon: <Send className="h-4 w-4 mr-2" />
-      };
-    }
+  // Render pagination component
+  const renderPagination = (pagination: any) => {
+    if (pagination.totalPages <= 1) return null;
 
-    switch (request.status) {
-      case 'waiting to confirm':
-        return {
-          text: "Sent Request - Reviewing Request",
-          variant: "outline" as const,
-          disabled: true,
-          icon: <HourglassIcon className="h-4 w-4 mr-2" />
-        };
-      case 'approved':
-        return {
-          text: "Miles Credited",
-          variant: "outline" as const,
-          disabled: true,
-          icon: <CheckCircle className="h-4 w-4 mr-2" />
-        };
-      case 'rejected':
-        return {
-          text: "Request Rejected",
-          variant: "outline" as const,
-          disabled: true,
-          icon: <X className="h-4 w-4 mr-2" />
-        };
-      default:
-        return {
-          text: "Request Earn Miles Now",
-          variant: "default" as const,
-          disabled: false,
-          icon: <Send className="h-4 w-4 mr-2" />
-        };
-    }
+    return (
+      <div className="mt-6">
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            
+            {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
+              <PaginationItem key={page}>
+                <PaginationLink
+                  onClick={() => setCurrentPage(page)}
+                  isActive={currentPage === page}
+                  className="cursor-pointer"
+                >
+                  {page}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            
+            <PaginationItem>
+              <PaginationNext 
+                onClick={() => setCurrentPage(Math.min(pagination.totalPages, currentPage + 1))}
+                className={currentPage === pagination.totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+        
+        <div className="text-center mt-2 text-sm text-muted-foreground">
+          Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, pagination.totalItems)} of {pagination.totalItems} flights
+        </div>
+      </div>
+    );
   };
 
-  const FlightCard = ({ flight, showActions = false }: { flight: any; showActions?: boolean }) => {
-    const request = requests.find(req => req.flightNumber === flight.flightNumber);
-    const buttonState = getEarnMilesButtonState(flight);
+  // Flight card component with new design (REMOVED BONUS MILES)
+  const FlightCard = ({ flight }: { flight: any }) => {
+    const milesRequested = hasRequestForFlight(flight.flightNumber) || flight.milesRequested === true || flight.milesRequested === "pending";
+    const requestInfo = getRequestForFlight(flight.flightNumber);
     
     return (
-      <Card className="mb-4">
+      <Card className="hover:shadow-md transition-shadow">
         <CardContent className="p-6">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-blue-100 rounded-lg">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start space-x-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                 <Plane className="h-6 w-6 text-blue-600" />
               </div>
               <div>
@@ -1702,493 +495,513 @@ Thank you for choosing Vietnam Airlines!
                 <p className="text-gray-600">{flight.airline}</p>
               </div>
             </div>
-            <div className="text-right">
-              {getFlightStatus(flight)}
-              <p className="text-sm text-gray-500 mt-1">{flight.bookingReference}</p>
-            </div>
+            <Badge 
+              variant={
+                flight.status === "Completed" ? "default" : 
+                flight.status === "Ongoing" ? "secondary" : 
+                flight.status === "Cancelled" ? "destructive" :
+                flight.status === "Miles Requested" ? "secondary" :
+                "outline"
+              }
+              className={
+                flight.status === "Completed" ? "bg-green-100 text-green-700" :
+                flight.status === "Ongoing" ? "bg-blue-100 text-blue-700" :
+                flight.status === "Cancelled" ? "bg-red-100 text-red-700" :
+                flight.status === "Miles Requested" ? "bg-yellow-100 text-yellow-700" :
+                "bg-gray-100 text-gray-700"
+              }
+            >
+              {flight.status}
+            </Badge>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
-            <div className="flex items-center space-x-3">
-              <MapPin className="h-5 w-5 text-gray-400" />
-              <div>
-                <p className="font-medium">{flight.from.code}</p>
-                <p className="text-sm text-gray-600">{flight.from.city}</p>
-                <p className="text-sm font-medium">{flight.departureTime}</p>
-              </div>
+          
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold">{flight.from.code}</div>
+              <div className="text-sm text-gray-600">{flight.departureTime}</div>
             </div>
             
-            <div className="flex items-center justify-center">
-              <div className="text-center">
-                <Clock className="h-5 w-5 text-gray-400 mx-auto mb-1" />
-                <p className="text-sm text-gray-600">{flight.duration}</p>
-                <div className="w-24 h-px bg-gray-300 mx-auto mt-2"></div>
+            <div className="text-center flex flex-col items-center">
+              <div className="flex items-center space-x-2 mb-1">
+                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                <div className="flex-1 h-px bg-gray-300"></div>
+                <Plane className="h-4 w-4 text-gray-400" />
+                <div className="flex-1 h-px bg-gray-300"></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
               </div>
+              <div className="text-sm text-gray-600">{flight.duration}</div>
             </div>
             
-            <div className="flex items-center space-x-3 justify-end">
-              <div className="text-right">
-                <p className="font-medium">{flight.to.code}</p>
-                <p className="text-sm text-gray-600">{flight.to.city}</p>
-                <p className="text-sm font-medium">{flight.arrivalTime}</p>
+            <div className="text-center">
+              <div className="text-2xl font-bold">{flight.to.code}</div>
+              <div className="text-sm text-gray-600">{flight.arrivalTime}</div>
+            </div>
+          </div>
+
+          {/* UPDATED GRID - REMOVED BONUS MILES COLUMN */}
+          <div className="grid grid-cols-4 gap-4 text-sm text-gray-600 mb-4">
+            <div>
+              <div className="flex items-center space-x-1 mb-1">
+                <Calendar className="h-4 w-4" />
+                <span className="font-medium">Date</span>
               </div>
-              <MapPin className="h-5 w-5 text-gray-400" />
+              <div>{new Date(flight.departureDate).toLocaleDateString()}</div>
+            </div>
+            
+            <div>
+              <div className="flex items-center space-x-1 mb-1">
+                <Users className="h-4 w-4" />
+                <span className="font-medium">Class</span>
+              </div>
+              <div>{flight.class}</div>
+            </div>
+            
+            <div>
+              <div className="flex items-center space-x-1 mb-1">
+                <MapPin className="h-4 w-4" />
+                <span className="font-medium">Seat</span>
+              </div>
+              <div>{flight.seatNumber}</div>
+            </div>
+            
+            <div>
+              <div className="flex items-center space-x-1 mb-1">
+                <Award className="h-4 w-4" />
+                <span className="font-medium">Qualifying Miles</span>
+              </div>
+              <div className="font-bold text-blue-600">{flight.miles.toLocaleString()}</div>
             </div>
           </div>
 
-          <div className="flex items-center space-x-6 text-sm text-gray-600 mb-4">
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4" />
-              <span>{new Date(flight.departureDate).toLocaleDateString()}</span>
+          {flight.type === "past" && !milesRequested && (
+            <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <p className="text-sm text-orange-800">
+                You can request miles for this completed flight.
+              </p>
             </div>
-            <div className="flex items-center space-x-2">
-              <Users className="h-4 w-4" />
-              <span>{flight.class} - {flight.seatNumber}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Plane className="h-4 w-4" />
-              <span>{flight.aircraft}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Award className="h-4 w-4" />
-              <span>{flight.miles.toLocaleString()} miles</span>
-            </div>
-          </div>
+          )}
 
-          {flight.type === "past" && (
-            <div className="border-t pt-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  {request?.status === 'waiting to confirm' && `Your request for ${request.calculatedMiles.toLocaleString()} miles is under review.`}
-                  {request?.status === 'approved' && `${request.calculatedMiles.toLocaleString()} miles have been credited to your account.`}
-                  {request?.status === 'rejected' && `Your miles request was rejected. ${request.reason || ''}`}
-                  {!request && "You can request miles for this completed flight."}
+          {flight.type === "past" && flight.milesRequested === "pending" && (
+            <div className="mb-4 p-4 rounded-lg border-2 bg-yellow-50 border-yellow-200">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <p className="text-sm text-yellow-800 mb-2">
+                    Miles request is currently being processed. Please allow 3-5 business days.
+                  </p>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-yellow-700">Qualifying Miles:</span>
+                      <span className="font-bold text-yellow-800 ml-1">{flight.miles.toLocaleString()}</span>
+                    </div>
+                    <div>
+                      <span className="text-yellow-700">Bonus Miles:</span>
+                      <span className="font-bold text-yellow-800 ml-1">{(flight.bonusMiles || flight.miles).toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
-                <Button
-                  onClick={() => handleEarnMilesClick(flight)}
-                  variant={buttonState.variant}
-                  disabled={buttonState.disabled}
-                  className={`${request?.status === 'waiting to confirm' ? 'bg-orange-600 hover:bg-orange-700' : request?.status === 'approved' ? 'bg-green-600 hover:bg-green-700' : !request ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
-                >
-                  {buttonState.icon}
-                  {buttonState.text}
-                </Button>
+                <Badge className="text-xs ml-2 bg-yellow-100 text-yellow-700">
+                  Pending
+                </Badge>
               </div>
             </div>
           )}
 
-          {showActions && flight.type === "upcoming" && (
-            <div className="border-t pt-4 flex space-x-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => handleDownloadTicket(flight)}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Download Ticket
-              </Button>
+          {flight.type === "past" && milesRequested && requestInfo && (
+            <div className={`mb-4 p-4 rounded-lg border-2 ${
+              requestInfo.status === 'approved' ? 'bg-green-50 border-green-200' :
+              requestInfo.status === 'rejected' ? 'bg-red-50 border-red-200' :
+              'bg-yellow-50 border-yellow-200'
+            }`}>
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  {requestInfo.status === 'approved' && (
+                    <div>
+                      <p className="text-sm text-green-800 mb-2">
+                        Miles have been successfully credited to your account!
+                      </p>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-green-700">Qualifying Miles:</span>
+                          <span className="font-bold text-green-800 ml-1">{requestInfo.calculatedMiles.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          <span className="text-green-700">Bonus Miles:</span>
+                          <span className="font-bold text-green-800 ml-1">{(requestInfo.bonusMiles || requestInfo.calculatedMiles).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {requestInfo.status === 'waiting to confirm' && (
+                    <p className="text-sm text-yellow-800">
+                      Miles request is pending approval. <span className="font-bold">{requestInfo.calculatedMiles.toLocaleString()} qualifying miles</span> and <span className="font-bold">{(requestInfo.bonusMiles || requestInfo.calculatedMiles).toLocaleString()} bonus miles</span> will be credited upon approval.
+                    </p>
+                  )}
+                  {requestInfo.status === 'rejected' && (
+                    <p className="text-sm text-red-800">
+                      Miles request was rejected. {requestInfo.reason && `Reason: ${requestInfo.reason}`}
+                    </p>
+                  )}
+                </div>
+                <Badge className={`text-xs ml-2 ${
+                  requestInfo.status === 'approved' ? 'bg-green-100 text-green-700' :
+                  requestInfo.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                  'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {requestInfo.status === 'approved' ? 'Approved' :
+                   requestInfo.status === 'rejected' ? 'Rejected' :
+                   'Pending'}
+                </Badge>
+              </div>
             </div>
           )}
+          
+          <div className="flex items-center justify-between pt-4 border-t">
+            {flight.type === "past" && (
+              <>
+                {milesRequested && requestInfo ? (
+                  <div className={`flex items-center ${
+                    requestInfo.status === 'approved' ? 'text-green-600' :
+                    requestInfo.status === 'rejected' ? 'text-red-600' :
+                    'text-yellow-600'
+                  }`}>
+                    {requestInfo.status === 'approved' && <CheckCircle className="h-4 w-4 mr-2" />}
+                    {requestInfo.status === 'rejected' && <AlertCircle className="h-4 w-4 mr-2" />}
+                    {requestInfo.status === 'waiting to confirm' && <HourglassIcon className="h-4 w-4 mr-2" />}
+                    <span className="text-sm">
+                      {requestInfo.status === 'approved' ? 'Miles Completed' :
+                       requestInfo.status === 'rejected' ? 'Miles Rejected' :
+                       'Miles Pending'}
+                    </span>
+                  </div>
+                ) : flight.milesRequested === "pending" ? (
+                  <div className="flex items-center text-yellow-600">
+                    <HourglassIcon className="h-4 w-4 mr-2" />
+                    <span className="text-sm">Miles Processing</span>
+                  </div>
+                ) : (
+                  <Button 
+                    size="sm" 
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={() => handleRequestMiles(flight)}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Request Earn Miles Now
+                  </Button>
+                )}
+              </>
+            )}
+
+            {(flight.type === "upcoming" || flight.type === "ongoing") && (
+              <Button variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Download E-Ticket
+              </Button>
+            )}
+
+            {flight.type === "cancelled" && (
+              <div className="flex items-center text-red-600">
+                <X className="h-4 w-4 mr-2" />
+                <span className="text-sm">Flight Cancelled</span>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     );
   };
 
+  // Get flight counts for each tab
+  const upcomingFlights = getFilteredFlights("upcoming");
+  const ongoingFlights = getFilteredFlights("ongoing");
+  const pastFlights = getFilteredFlights("past");
+  const cancelledFlights = getFilteredFlights("cancelled");
+
   return (
     <div className="space-y-6">
-      {/* Date Filter */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Filter className="h-5 w-5" />
-            <span>Filter by Flight Date</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Label htmlFor="date-from">From:</Label>
-              <Input
-                id="date-from"
-                type="date"
-                value={dateFilter.from}
-                onChange={(e) => setDateFilter(prev => ({ ...prev, from: e.target.value }))}
-                className="w-40"
-              />
+      {/* Page Header */}
+      <div className="bg-white rounded-lg p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Plane className="h-6 w-6 text-blue-600" />
             </div>
-            <div className="flex items-center space-x-2">
-              <Label htmlFor="date-to">To:</Label>
-              <Input
-                id="date-to"
-                type="date"
-                value={dateFilter.to}
-                onChange={(e) => setDateFilter(prev => ({ ...prev, to: e.target.value }))}
-                className="w-40"
-              />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">My Flights</h1>
+              <p className="text-gray-600 text-sm">Manage all your flights and earn miles</p>
             </div>
-            <Button 
-              variant="outline" 
-              onClick={() => setDateFilter({ from: "", to: "" })}
-            >
-              Clear Filter
-            </Button>
           </div>
+          
+          <div className="text-center">
+            <div className="font-bold text-2xl text-blue-600">{memberData.completedFlightsCount}</div>
+            <p className="text-xs text-gray-500">Completed Flights</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Flight Tabs */}
+      <Card className="bg-white shadow-sm">
+        <CardContent className="p-6">
+          <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="upcoming" className="text-sm">
+                Upcoming ({upcomingFlights.length})
+              </TabsTrigger>
+              <TabsTrigger value="ongoing" className="text-sm">
+                Ongoing ({ongoingFlights.length})
+              </TabsTrigger>
+              <TabsTrigger value="past" className="text-sm">
+                Completed ({pastFlights.length})
+              </TabsTrigger>
+              <TabsTrigger value="cancelled" className="text-sm">
+                Cancelled ({cancelledFlights.length})
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Filters for Completed Flights */}
+            {selectedTab === "past" && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <Filter className="h-4 w-4 text-gray-600" />
+                      <span className="text-sm font-medium text-gray-700">Filter:</span>
+                    </div>
+                    
+                    <Select value={completedFlightFilter} onValueChange={(value: any) => setCompletedFlightFilter(value)}>
+                      <SelectTrigger className="w-56">
+                        <SelectValue placeholder="Filter flights" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Completed Flight</SelectItem>
+                        <SelectItem value="not-requested">Not Send Miles Requests</SelectItem>
+                        <SelectItem value="requested">Miles Requests</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="date"
+                        placeholder="From Date"
+                        value={dateFilter.from}
+                        onChange={(e) => setDateFilter(prev => ({ ...prev, from: e.target.value }))}
+                        className="w-36"
+                      />
+                      <Input
+                        type="date"
+                        placeholder="To Date"
+                        value={dateFilter.to}
+                        onChange={(e) => setDateFilter(prev => ({ ...prev, to: e.target.value }))}
+                        className="w-36"
+                      />
+                    </div>
+                  </div>
+                  
+                  {(dateFilter.from || dateFilter.to || completedFlightFilter !== "all") && (
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      <X className="h-4 w-4 mr-2" />
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Flight Lists */}
+            <TabsContent value="upcoming" className="mt-6">
+              {(() => {
+                const pagination = getPagedFlights(upcomingFlights);
+                return (
+                  <div className="space-y-4">
+                    {pagination.data.map((flight) => (
+                      <FlightCard key={flight.id} flight={flight} />
+                    ))}
+                    {renderPagination(pagination)}
+                  </div>
+                );
+              })()}
+            </TabsContent>
+
+            <TabsContent value="ongoing" className="mt-6">
+              {(() => {
+                const pagination = getPagedFlights(ongoingFlights);
+                return (
+                  <div className="space-y-4">
+                    {pagination.data.map((flight) => (
+                      <FlightCard key={flight.id} flight={flight} />
+                    ))}
+                    {renderPagination(pagination)}
+                  </div>
+                );
+              })()}
+            </TabsContent>
+
+            <TabsContent value="past" className="mt-6">
+              {(() => {
+                const pagination = getPagedFlights(pastFlights);
+                return (
+                  <div className="space-y-4">
+                    {pagination.data.map((flight) => (
+                      <FlightCard key={flight.id} flight={flight} />
+                    ))}
+                    {renderPagination(pagination)}
+                  </div>
+                );
+              })()}
+            </TabsContent>
+
+            <TabsContent value="cancelled" className="mt-6">
+              {(() => {
+                const pagination = getPagedFlights(cancelledFlights);
+                return (
+                  <div className="space-y-4">
+                    {pagination.data.map((flight) => (
+                      <FlightCard key={flight.id} flight={flight} />
+                    ))}
+                    {renderPagination(pagination)}
+                  </div>
+                );
+              })()}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedTab("upcoming")}>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">
-              {upcomingFlights.length}
-            </div>
-            <p className="text-sm text-gray-600">Upcoming Flights</p>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedTab("ongoing")}>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-purple-600">
-              {ongoingFlights.length}
-            </div>
-            <p className="text-sm text-gray-600">Ongoing Flights</p>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedTab("past")}>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">
-              {pastFlights.length}
-            </div>
-            <p className="text-sm text-gray-600">Completed Flights</p>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedTab("cancelled")}>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-red-600">
-              {cancelledFlights.length}
-            </div>
-            <p className="text-sm text-gray-600">Cancelled Flights</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-orange-600">
-              {(upcomingFlights.length + ongoingFlights.length + pastFlights.length + cancelledFlights.length)}
-            </div>
-            <p className="text-sm text-gray-600">Total Flights</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Flights Tabs */}
-      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="upcoming">Upcoming Flights</TabsTrigger>
-          <TabsTrigger value="ongoing">Ongoing Flights</TabsTrigger>
-          <TabsTrigger value="past">Completed Flights</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled Flights</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="upcoming" className="space-y-4">
-          {upcomingFlights.length > 0 ? (
-            upcomingFlights.map((flight) => (
-              <FlightCard key={flight.id} flight={flight} showActions={true} />
-            ))
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <Plane className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming flights</h3>
-                <p className="text-gray-500 mb-4">You don't have any upcoming flights booked.</p>
-                <Button>Book a Flight</Button>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="ongoing" className="space-y-4">
-          {ongoingFlights.length > 0 ? (
-            ongoingFlights.map((flight) => (
-              <FlightCard key={flight.id} flight={flight} showActions={true} />
-            ))
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No ongoing flights</h3>
-                <p className="text-gray-500">You don't have any flights currently in progress.</p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="past" className="space-y-4">
-          {/* Filter for completed flights */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-4">
-                <Label htmlFor="completed-filter">Filter completed flights:</Label>
-                <Select 
-                  value={completedFlightFilter} 
-                  onValueChange={(value: "all" | "not-sent" | "sent") => setCompletedFlightFilter(value)}
-                >
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Completed Flights</SelectItem>
-                    <SelectItem value="not-sent">Miles Not Requested</SelectItem>
-                    <SelectItem value="sent">Miles Requested</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-
-          {getFilteredCompletedFlights().length > 0 ? (
-            getFilteredCompletedFlights().map((flight) => (
-              <FlightCard key={flight.id} flight={flight} />
-            ))
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No completed flights</h3>
-                <p className="text-gray-500">No completed flights match your current filter.</p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="cancelled" className="space-y-4">
-          {cancelledFlights.length > 0 ? (
-            cancelledFlights.map((flight) => (
-              <FlightCard key={flight.id} flight={flight} />
-            ))
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <X className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No cancelled flights</h3>
-                <p className="text-gray-500">You don't have any cancelled flights.</p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* Earn Miles Dialog */}
+      {/* Enhanced Request Miles Dialog */}
       <Dialog open={showEarnMilesDialog} onOpenChange={setShowEarnMilesDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
-              <Award className="h-5 w-5" />
-              <span>Request Earn Miles</span>
+              <Calculator className="h-5 w-5 text-blue-600" />
+              <span>Miles Calculation & Request</span>
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="flight-number">Flight Number</Label>
-                <Input
-                  id="flight-number"
-                  value={earnMilesForm.flightNumber}
-                  onChange={(e) => setEarnMilesForm(prev => ({ ...prev, flightNumber: e.target.value }))}
-                  disabled
-                />
-              </div>
-              <div>
-                <Label htmlFor="airline">Airline</Label>
-                <Input
-                  id="airline"
-                  value={earnMilesForm.airline}
-                  onChange={(e) => setEarnMilesForm(prev => ({ ...prev, airline: e.target.value }))}
-                  disabled
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="from">From</Label>
-                <Input
-                  id="from"
-                  value={earnMilesForm.from}
-                  onChange={(e) => setEarnMilesForm(prev => ({ ...prev, from: e.target.value }))}
-                  disabled
-                />
-              </div>
-              <div>
-                <Label htmlFor="to">To</Label>
-                <Input
-                  id="to"
-                  value={earnMilesForm.to}
-                  onChange={(e) => setEarnMilesForm(prev => ({ ...prev, to: e.target.value }))}
-                  disabled
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="departure-date">Departure Date</Label>
-                <Input
-                  id="departure-date"
-                  type="date"
-                  value={earnMilesForm.departureDate}
-                  onChange={(e) => setEarnMilesForm(prev => ({ ...prev, departureDate: e.target.value }))}
-                  disabled
-                />
-              </div>
-              <div>
-                <Label htmlFor="distance">Distance (miles)</Label>
-                <Input
-                  id="distance"
-                  value={earnMilesForm.distance}
-                  onChange={(e) => setEarnMilesForm(prev => ({ ...prev, distance: e.target.value }))}
-                  disabled
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="service-class">Service Class</Label>
-                <Select 
-                  value={earnMilesForm.serviceClass} 
-                  onValueChange={(value) => setEarnMilesForm(prev => ({ ...prev, serviceClass: value, seatClass: "" }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select service class" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Economy">Economy</SelectItem>
-                    <SelectItem value="Premium Economy">Premium Economy</SelectItem>
-                    <SelectItem value="Business">Business</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="seat-class">Seat Class</Label>
-                <Select 
-                  value={earnMilesForm.seatClass} 
-                  onValueChange={(value) => setEarnMilesForm(prev => ({ ...prev, seatClass: value }))}
-                  disabled={!earnMilesForm.serviceClass}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select seat class" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getSeatClassOptions(earnMilesForm.serviceClass).map(seatClass => (
-                      <SelectItem key={seatClass} value={seatClass}>{seatClass}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex space-x-2">
-              <Button onClick={calculateMiles} variant="outline" className="flex items-center space-x-2">
-                <Calculator className="h-4 w-4" />
-                <span>Calculate Miles</span>
-              </Button>
-              {earnMilesForm.calculatedMiles > 0 && (
-                <div className="flex items-center space-x-2 text-green-600">
-                  <CheckCircle className="h-5 w-5" />
-                  <span className="font-medium">{earnMilesForm.calculatedMiles.toLocaleString()} miles calculated</span>
-                </div>
-              )}
-            </div>
-
-            {earnMilesForm.calculatedMiles > 0 && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium mb-2">Calculation Details:</h4>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p>Base Distance: {earnMilesForm.calculationDetails.baseMiles.toLocaleString()} miles</p>
-                  <p>Distance Category: {earnMilesForm.calculationDetails.distanceCategory}</p>
-                  <p>Multiplier: {earnMilesForm.calculationDetails.multiplier}x</p>
-                  <p className="font-medium text-green-600">
-                    Total Miles: {earnMilesForm.calculatedMiles.toLocaleString()} miles
-                  </p>
+          {selectedFlight && (
+            <div className="space-y-6">
+              {/* Flight Details */}
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h3 className="font-semibold text-blue-900 mb-3">Flight Details</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-blue-700">Flight:</span>
+                    <span className="font-bold text-blue-900 ml-1">{selectedFlight.flightNumber}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700">Airline:</span>
+                    <span className="font-bold text-blue-900 ml-1">{selectedFlight.airline}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700">Route:</span>
+                    <span className="font-bold text-blue-900 ml-1">{selectedFlight.from.city} → {selectedFlight.to.city}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700">Date:</span>
+                    <span className="font-bold text-blue-900 ml-1">{new Date(selectedFlight.departureDate).toLocaleDateString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700">Class:</span>
+                    <span className="font-bold text-blue-900 ml-1">{selectedFlight.class}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700">Distance:</span>
+                    <span className="font-bold text-blue-900 ml-1">{selectedFlight.distance.toLocaleString()} km</span>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Miles Calculation */}
+              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                <h3 className="font-semibold text-green-900 mb-4 flex items-center">
+                  <Award className="h-4 w-4 mr-2" />
+                  Miles Calculation Breakdown
+                </h3>
+                
+                {(() => {
+                  const calculation = calculateBonusMiles(selectedFlight.miles, selectedFlight.class);
+                  return (
+                    <div className="space-y-4">
+                      {/* Base Qualifying Miles */}
+                      <div className="flex items-center justify-between p-3 bg-white rounded border">
+                        <div className="flex items-center space-x-2">
+                          <Award className="h-4 w-4 text-blue-500" />
+                          <span className="font-medium text-gray-700">Base Qualifying Miles</span>
+                        </div>
+                        <span className="font-bold text-blue-600">{calculation.qualifyingMiles.toLocaleString()}</span>
+                      </div>
+
+                      {/* Service Class Multiplier */}
+                      <div className="flex items-center justify-between p-3 bg-white rounded border">
+                        <div className="flex items-center space-x-2">
+                          <Star className="h-4 w-4 text-yellow-500" />
+                          <span className="font-medium text-gray-700">{selectedFlight.class} Class Multiplier</span>
+                        </div>
+                        <span className="font-bold text-yellow-600">{calculation.multiplier}x</span>
+                      </div>
+
+                      {/* Calculation Formula */}
+                      <div className="p-3 bg-gray-50 rounded border border-dashed border-gray-300">
+                        <div className="text-center text-sm text-gray-600 mb-2">Calculation Formula</div>
+                        <div className="text-center font-mono text-sm">
+                          <span className="text-blue-600">{calculation.qualifyingMiles.toLocaleString()}</span>
+                          <span className="text-gray-500"> × </span>
+                          <span className="text-yellow-600">{calculation.multiplier}</span>
+                          <span className="text-gray-500"> = </span>
+                          <span className="text-green-600 font-bold">{calculation.bonusMiles.toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      {/* Total Bonus Miles */}
+                      <div className="flex items-center justify-between p-4 bg-green-100 rounded border-2 border-green-300">
+                        <div className="flex items-center space-x-2">
+                          <TrendingUp className="h-5 w-5 text-green-600" />
+                          <span className="font-bold text-green-800">Total Bonus Miles Earned</span>
+                        </div>
+                        <span className="font-bold text-2xl text-green-600">{calculation.bonusMiles.toLocaleString()}</span>
+                      </div>
+
+                      {/* Miles Breakdown Summary */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-blue-50 rounded border">
+                          <div className="text-xs text-blue-600 mb-1">FOR TIER STATUS</div>
+                          <div className="font-bold text-blue-800">Qualifying Miles</div>
+                          <div className="text-xl font-bold text-blue-600">{calculation.qualifyingMiles.toLocaleString()}</div>
+                        </div>
+                        <div className="p-3 bg-green-50 rounded border">
+                          <div className="text-xs text-green-600 mb-1">FOR REDEMPTION</div>
+                          <div className="font-bold text-green-800">Bonus Miles</div>
+                          <div className="text-xl font-bold text-green-600">{calculation.bonusMiles.toLocaleString()}</div>
+                        </div>
+                      </div>
+
+                      {/* Additional Information */}
+                      <div className="p-3 bg-yellow-50 rounded border border-yellow-200">
+                        <div className="flex items-start space-x-2">
+                          <Info className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-sm text-yellow-800">
+                            <p className="font-medium mb-1">Important Notes:</p>
+                            <ul className="text-xs space-y-1 list-disc list-inside">
+                              <li>Qualifying miles count toward your tier status progression</li>
+                              <li>Bonus miles can be used for award redemptions and vouchers</li>
+                              <li>Miles will be credited within 3-5 business days after approval</li>
+                              <li>Service class multiplier applies only to bonus miles, not qualifying miles</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEarnMilesDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmitEarnMiles} disabled={!earnMilesForm.calculatedMiles}>
-              Submit Request
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Ticket Modal */}
-      <Dialog open={showTicketModal} onOpenChange={handleCloseTicketModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>E-Ticket</DialogTitle>
-          </DialogHeader>
-          
-          {selectedTicketFlight && (
-            <div className="space-y-4">
-              <div className="text-center border-b pb-4">
-                <h3 className="font-bold text-lg">{selectedTicketFlight.airline}</h3>
-                <p className="text-gray-600">Electronic Ticket</p>
-              </div>
-              
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Flight:</span>
-                  <span className="font-medium">{selectedTicketFlight.flightNumber}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">From:</span>
-                  <span className="font-medium">{selectedTicketFlight.from.code} - {selectedTicketFlight.from.city}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">To:</span>
-                  <span className="font-medium">{selectedTicketFlight.to.code} - {selectedTicketFlight.to.city}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Date:</span>
-                  <span className="font-medium">{new Date(selectedTicketFlight.departureDate).toLocaleDateString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Time:</span>
-                  <span className="font-medium">{selectedTicketFlight.departureTime}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Seat:</span>
-                  <span className="font-medium">{selectedTicketFlight.seatNumber}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Class:</span>
-                  <span className="font-medium">{selectedTicketFlight.class}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Booking Ref:</span>
-                  <span className="font-medium">{selectedTicketFlight.bookingReference}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">E-Ticket:</span>
-                  <span className="font-medium">{selectedTicketFlight.eTicket}</span>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCloseTicketModal}>
-              Close
-            </Button>
-            <Button onClick={handleDownloadTicketFile}>
-              <Download className="h-4 w-4 mr-2" />
-              Download
+            <Button onClick={handleEarnMilesSubmit} className="bg-green-600 hover:bg-green-700">
+              <Send className="h-4 w-4 mr-2" />
+              Submit Miles Request
             </Button>
           </DialogFooter>
         </DialogContent>

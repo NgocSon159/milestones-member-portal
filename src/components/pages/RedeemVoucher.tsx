@@ -33,6 +33,7 @@ interface User {
 interface RedeemVoucherProps {
   user: User;
   section?: string;
+  onPageChange?: (page: string, params?: any) => void;
 }
 
 interface Voucher {
@@ -92,7 +93,50 @@ const getMemberDataLocal = (email: string) => {
   }
 };
 
-// Available vouchers by tier
+// Loyalty vouchers (free for Gold members)
+const loyaltyVouchers: Voucher[] = [
+  {
+    id: "L001",
+    title: "Welcome Drink",
+    description: "Complimentary welcome drink on your next flight",
+    category: "dining",
+    value: "FREE",
+    requiredTier: "Gold",
+    requiredMiles: 0,
+    expiryDays: 60,
+    icon: Coffee,
+    terms: ["Available on international flights", "Must be claimed at check-in", "Non-transferable"],
+    maxClaims: 1
+  },
+  {
+    id: "L002", 
+    title: "Priority Check-in",
+    description: "Skip the regular check-in queue",
+    category: "flight",
+    value: "FREE",
+    requiredTier: "Gold",
+    requiredMiles: 0,
+    expiryDays: 90,
+    icon: Plane,
+    terms: ["Valid at participating airports", "Subject to availability", "Cannot be combined with other offers"],
+    maxClaims: 3
+  },
+  {
+    id: "L003",
+    title: "Extra Baggage Allowance",
+    description: "Additional 10kg baggage allowance",
+    category: "flight", 
+    value: "+10KG",
+    requiredTier: "Gold",
+    requiredMiles: 0,
+    expiryDays: 30,
+    icon: ShoppingBag,
+    terms: ["Valid on selected routes", "Must be requested at booking", "Weight restrictions apply"],
+    maxClaims: 2
+  }
+];
+
+// Available vouchers by tier (requires miles)
 const availableVouchers: Voucher[] = [
   // Silver Tier Vouchers
   {
@@ -261,7 +305,7 @@ const getCategoryIcon = (category: string) => {
   }
 };
 
-export function RedeemVoucher({ user, section }: RedeemVoucherProps) {
+export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProps) {
   const { requests } = useEarnMiles();
   const [claimedVouchers, setClaimedVouchers] = useState<ClaimedVoucher[]>([]);
   const [showClaimDialog, setShowClaimDialog] = useState(false);
@@ -271,18 +315,25 @@ export function RedeemVoucher({ user, section }: RedeemVoucherProps) {
   const sharedMemberData = getMemberData(requests);
   const localMemberData = getMemberDataLocal(user.email);
   
-  // Create unified member data with shared data taking precedence
+  // Force Gold tier as requested
   const unifiedMemberData = {
-    tier: sharedMemberData.currentTier,
+    tier: "Gold",
     totalMiles: sharedMemberData.milesExpiringEndOfYear, // Available miles for redemption
     tierMiles: sharedMemberData.currentTierMiles,
-    nextTier: sharedMemberData.nextTier,
-    nextTierMiles: sharedMemberData.nextTierRequired
+    nextTier: "Platinum",
+    nextTierMiles: 75000
   };
 
   // Filter vouchers based on member tier - only show vouchers for current tier
   const getAvailableVouchers = () => {
     return availableVouchers.filter(voucher => {
+      return voucher.requiredTier === unifiedMemberData.tier;
+    });
+  };
+
+  // Get loyalty vouchers for Gold members
+  const getLoyaltyVouchers = () => {
+    return loyaltyVouchers.filter(voucher => {
       return voucher.requiredTier === unifiedMemberData.tier;
     });
   };
@@ -344,77 +395,73 @@ export function RedeemVoucher({ user, section }: RedeemVoucherProps) {
     }
   };
 
-  const VoucherCard = ({ voucher, isAvailable = true }: { voucher: Voucher; isAvailable?: boolean }) => {
+  const VoucherCard = ({ voucher, isAvailable = true, isLoyalty = false }: { voucher: Voucher; isAvailable?: boolean; isLoyalty?: boolean }) => {
     const IconComponent = getCategoryIcon(voucher.category);
     const canClaim = canClaimVoucher(voucher);
     const isDisabled = !canClaim && isAvailable;
 
     return (
-      <Card className={`${isDisabled ? 'opacity-50' : ''} hover:shadow-md transition-shadow`}>
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-3 bg-blue-100 rounded-full">
-                <IconComponent className="h-6 w-6 text-blue-600" />
+      <Card className={`${isDisabled ? 'opacity-50' : ''} hover:shadow-lg transition-all duration-200 border-0 shadow-sm`}>
+        <CardContent className="p-5">
+          <div className="space-y-4">
+            {/* Header with icon and value */}
+            <div className="flex items-start justify-between">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <IconComponent className="h-5 w-5 text-blue-600" />
               </div>
-              <div>
-                <h3 className="font-semibold text-lg">{voucher.title}</h3>
-                <p className="text-sm text-gray-600">{voucher.description}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-green-600 mb-1">
-                {voucher.value}
-              </div>
-              <Badge className={getTierColor(voucher.requiredTier)}>
-                {getTierIcon(voucher.requiredTier)}
-                <span className="ml-1">{voucher.requiredTier}</span>
-              </Badge>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm text-gray-600">
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-1">
-                  <Award className="h-4 w-4" />
-                  <span>{voucher.requiredMiles.toLocaleString()} miles</span>
+              <div className="text-right">
+                <div className={`text-xl font-bold ${isLoyalty ? 'text-green-600' : 'text-blue-600'} mb-1`}>
+                  {voucher.value}
                 </div>
+                {isLoyalty && (
+                  <Badge className="bg-green-100 text-green-700 text-xs">
+                    FREE
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Title and description */}
+            <div>
+              <h3 className="font-semibold text-base mb-1">{voucher.title}</h3>
+              <p className="text-sm text-gray-600 leading-relaxed">{voucher.description}</p>
+            </div>
+
+            {/* Miles and validity info */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center space-x-1">
+                  <Award className="h-4 w-4 text-gray-400" />
+                  {isLoyalty ? (
+                    <span className="font-semibold text-green-600">FREE</span>
+                  ) : (
+                    <span className="font-bold text-gray-900">{voucher.requiredMiles.toLocaleString()} miles</span>
+                  )}
+                </div>
+                <div className="flex items-center space-x-1 text-gray-500">
                   <Calendar className="h-4 w-4" />
-                  <span>Valid {voucher.expiryDays} days</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <Gift className="h-4 w-4" />
-                  <span>Max {voucher.maxClaims} claims</span>
+                  <span>{voucher.expiryDays} days</span>
                 </div>
               </div>
             </div>
 
-            <div className="border-t pt-3">
-              <p className="text-xs text-gray-500 mb-2">Terms & Conditions:</p>
-              <ul className="text-xs text-gray-600 space-y-1">
-                {voucher.terms.slice(0, 2).map((term, index) => (
-                  <li key={index}>• {term}</li>
-                ))}
-              </ul>
-            </div>
-
+            {/* Action button */}
             {isAvailable && (
-              <div className="pt-3">
-                {canClaim ? (
+              <div className="pt-2">
+                {canClaim || isLoyalty ? (
                   <Button 
                     onClick={() => handleClaimVoucher(voucher)}
-                    className="w-full bg-green-600 hover:bg-green-700"
+                    className={`w-full ${isLoyalty ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+                    size="sm"
                   >
                     <Gift className="h-4 w-4 mr-2" />
-                    Claim Voucher
+                    {isLoyalty ? "Claim Free" : "Redeem"}
                   </Button>
                 ) : (
-                  <Button disabled className="w-full">
+                  <Button disabled className="w-full text-xs" size="sm">
                     {unifiedMemberData.totalMiles < voucher.requiredMiles ? 
                       `Need ${(voucher.requiredMiles - unifiedMemberData.totalMiles).toLocaleString()} more miles` :
-                      'Maximum claims reached'
+                      'Max claims reached'
                     }
                   </Button>
                 )}
@@ -495,109 +542,106 @@ export function RedeemVoucher({ user, section }: RedeemVoucherProps) {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="p-3 bg-blue-100 rounded-lg">
-            <Gift className="h-6 w-6 text-blue-600" />
+      <div className="bg-white rounded-lg p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Gift className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Redeem Voucher</h1>
+              <p className="text-gray-600 text-sm">Redeem exciting vouchers with your miles</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Redeem Voucher</h1>
-            <p className="text-gray-600">Redeem exciting vouchers with your miles</p>
-          </div>
-        </div>
-        
-        {/* Member Status */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-4">
-              <div className="text-center">
-                <div className="flex items-center space-x-1 mb-1">
-                  {getTierIcon(unifiedMemberData.tier)}
-                  <span className="font-semibold">{unifiedMemberData.tier}</span>
-                </div>
-                <p className="text-xs text-gray-500">Current Tier</p>
-              </div>
-              <div className="border-l h-8"></div>
-              <div className="text-center">
-                <div className="font-bold text-red-600">{sharedMemberData.milesExpiringEndOfYear.toLocaleString()}</div>
-                <p className="text-xs text-gray-500">Available Miles</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Voucher Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-6 text-center">
-            <div className="text-3xl font-bold text-blue-600">
-              {getAvailableVouchers().length}
-            </div>
-            <p className="text-gray-600">Available Vouchers</p>
-          </CardContent>
-        </Card>
-        <Card className={section === "available-miles" ? "ring-2 ring-blue-500 ring-offset-2" : ""}>
-          <CardContent className="p-6 text-center">
-            <div className="text-3xl font-bold text-red-600">
-              {sharedMemberData.milesExpiringEndOfYear.toLocaleString()}
-            </div>
-            <p className="text-gray-600">Available Miles</p>
-            <p className="text-xs text-red-500 mt-1">Expiring this year</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Available Vouchers Section */}
-      <div className="space-y-4">
-
-        {/* Tier Information Card */}
-        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
+          
+          <div className="flex items-center space-x-6">
+            <div className="text-center">
+              <div className="flex items-center space-x-2">
                 {getTierIcon(unifiedMemberData.tier)}
-                <div>
-                  <h3 className="font-semibold text-gray-900">You are a {unifiedMemberData.tier} Member</h3>
-                  <p className="text-sm text-gray-600">Exclusive vouchers designed for your tier level</p>
-                </div>
+                <span className="font-semibold text-lg">{unifiedMemberData.tier}</span>
               </div>
-              {unifiedMemberData.tier !== "Platinum" && (
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">Upgrade to {unifiedMemberData.nextTier} for more exclusive offers!</p>
-                  <p className="text-xs text-gray-500">
-                    {((unifiedMemberData.nextTierMiles - unifiedMemberData.tierMiles) || 0).toLocaleString()} miles to {unifiedMemberData.nextTier}
-                  </p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Gift className="h-5 w-5 text-blue-600" />
-              <span>{unifiedMemberData.tier} Tier Exclusive Vouchers</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {getAvailableVouchers().map(voucher => (
-                <VoucherCard key={voucher.id} voucher={voucher} isAvailable={true} />
-              ))}
+              <p className="text-xs text-gray-500">Free for Gold members</p>
             </div>
             
-            {getAvailableVouchers().length === 0 && (
-              <div className="text-center py-8">
-                <Gift className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No {unifiedMemberData.tier} tier vouchers available</h3>
-                <p className="text-gray-500">Check back later for new {unifiedMemberData.tier} tier vouchers, or upgrade your membership for access to more exclusive offers!</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            <div className="text-center">
+              <div className="font-bold text-2xl text-red-600">{sharedMemberData.milesExpiringEndOfYear.toLocaleString()}</div>
+              <p className="text-xs text-gray-500">Available Miles</p>
+              <p className="text-xs text-red-500">Expiring this year</p>
+            </div>
+            
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => onPageChange && onPageChange('reward-details')}
+              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+            >
+              View All Tier
+            </Button>
+          </div>
+        </div>
       </div>
+
+
+
+      {/* Your Loyalty Vouchers Section */}
+      <Card className="bg-white shadow-sm">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center space-x-2 text-xl">
+                <Crown className="h-5 w-5 text-green-600" />
+                <span>Your Loyalty Vouchers</span>
+              </CardTitle>
+              <p className="text-sm text-gray-600 mt-1">Free vouchers available for Gold members - no miles required!</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {getLoyaltyVouchers().map(voucher => (
+              <VoucherCard key={voucher.id} voucher={voucher} isAvailable={true} isLoyalty={true} />
+            ))}
+          </div>
+          
+          {getLoyaltyVouchers().length === 0 && (
+            <div className="text-center py-12">
+              <Crown className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No loyalty vouchers available</h3>
+              <p className="text-gray-500">Check back later for new exclusive Gold member vouchers!</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Redeem Your Vouchers Section */}
+      <Card className="bg-white shadow-sm">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center space-x-2 text-xl">
+                <Gift className="h-5 w-5 text-blue-600" />
+                <span>Redeem Your Vouchers</span>
+              </CardTitle>
+              <p className="text-sm text-gray-600 mt-1">Use your miles to redeem these exclusive vouchers</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {getAvailableVouchers().map(voucher => (
+              <VoucherCard key={voucher.id} voucher={voucher} isAvailable={true} isLoyalty={false} />
+            ))}
+          </div>
+          
+          {getAvailableVouchers().length === 0 && (
+            <div className="text-center py-12">
+              <Gift className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No {unifiedMemberData.tier} tier vouchers available</h3>
+              <p className="text-gray-500">Check back later for new {unifiedMemberData.tier} tier vouchers, or upgrade your membership for access to more exclusive offers!</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Claim Confirmation Dialog */}
       <Dialog open={showClaimDialog} onOpenChange={setShowClaimDialog}>
@@ -636,7 +680,11 @@ export function RedeemVoucher({ user, section }: RedeemVoucherProps) {
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <span className="font-medium">Cost:</span>
-                  <span className="font-bold text-blue-600">{selectedVoucher.requiredMiles.toLocaleString()} miles</span>
+                  {selectedVoucher.requiredMiles === 0 ? (
+                    <span className="font-bold text-green-600">FREE</span>
+                  ) : (
+                    <span className="font-bold text-blue-600">{selectedVoucher.requiredMiles.toLocaleString()} miles</span>
+                  )}
                 </div>
                 
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">

@@ -43,15 +43,16 @@ export function Notifications({ user, memberName = "JOHN" }: NotificationsProps)
   // Member account info synchronized with Dashboard
   const memberInfo = {
     name: `MR.${memberName}`,
-    memberNumber: "920029843",
+    memberNumber: "VM123456789",
     tier: "Gold Member", // Match My Profile
-    currentMiles: memberData.totalMilesEarned, // Same as Dashboard Total Miles
+    currentMiles: memberData.totalQualifyingMiles, // Qualifying miles for tier calculation
+    bonusMiles: memberData.totalBonusMiles, // Bonus miles for redemption
     expiringMiles: memberData.milesExpiringEndOfYear, // Same as Dashboard Expiring Miles
     expiryDate: "Dec 31, 2024",
     tierStatus: memberData.currentTier,
     nextTier: memberData.nextTier,
     nextTierMiles: memberData.nextTierRequired,
-    milesNeeded: memberData.nextTierRequired - memberData.currentTierMiles // Same calculation as Dashboard
+    milesNeeded: memberData.milesToNextTier // Miles needed to reach next tier
   };
 
   // Generate notifications from approved earn miles requests
@@ -216,12 +217,12 @@ export function Notifications({ user, memberName = "JOHN" }: NotificationsProps)
             <div className="bg-white/10 rounded-lg p-4">
               <div className="flex items-center space-x-2 mb-2">
                 <TrendingUp className="h-5 w-5" />
-                <span className="font-medium">To Next Tier</span>
+                <span className="font-medium">Miles to Platinum</span>
               </div>
               <div className="text-xl font-bold">
                 {memberInfo.milesNeeded.toLocaleString()}
               </div>
-              <p className="text-sm text-blue-100">miles needed</p>
+              <p className="text-sm text-blue-100">qualifying miles needed</p>
             </div>
           </div>
         </CardContent>
