@@ -161,7 +161,8 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
           qualifyingMiles: item.qualifyingMiles || item.distance,
           bonusMiles: item.bonusMiles || item.distance,
           distance: item.distance,
-          milesRequested: item.requestEarnMiles ? true : false
+          milesRequested: item.requestEarnMilesStatus !== null,
+          requestEarnMilesStatus: item.requestEarnMilesStatus,  /*"rejected", "reviewing", "approved"*/
         };
       });
 
@@ -377,25 +378,64 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
   };
 
   // Handle earn miles submission
-  const handleEarnMilesSubmit = () => {
-    if (calculationResult && flightFormData) {
-      addRequest({
-        flightNumber: flightFormData.flightNumber,
-        airline: flightFormData.airline,
-        from: flightFormData.from,
-        to: flightFormData.to,
-        departureDate: flightFormData.departureDate,
-        serviceClass: flightFormData.class,
-        seatClass: flightFormData.seatNumber.charAt(flightFormData.seatNumber.length - 1),
-        distance: flightFormData.distance,
-        calculatedMiles: calculationResult.qualifyingMiles,
-        status: 'waiting to confirm' as const
-      });
-      toast.success("Miles request submitted successfully!");
-      setShowEarnMilesDialog(false);
-      setSelectedFlight(null);
-      setDialogStep("form");
-      setCalculationResult(null);
+  const handleEarnMilesSubmit = async () => {
+    if (calculationResult && flightFormData && selectedFlight) {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        // Make API call to request earn miles
+        const response = await fetch(
+          'https://mileswise-be.onrender.com/api/member/request-earn-miles',
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              customerFlightId: selectedFlight.id.toString()
+            })
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Update local context for UI consistency
+        addRequest({
+          flightNumber: flightFormData.flightNumber,
+          airline: flightFormData.airline,
+          from: flightFormData.from,
+          to: flightFormData.to,
+          departureDate: flightFormData.departureDate,
+          serviceClass: flightFormData.class,
+          seatClass: flightFormData.seatNumber.charAt(flightFormData.seatNumber.length - 1),
+          distance: flightFormData.distance,
+          qualifyingMiles: calculationResult.qualifyingMiles,
+          status: 'waiting to confirm' as const
+        });
+        
+        toast.success("Miles request submitted successfully!");
+        setShowEarnMilesDialog(false);
+        setSelectedFlight(null);
+        setDialogStep("form");
+        setCalculationResult(null);
+        
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'An error occurred while submitting miles request';
+        setError(errorMessage);
+        toast.error(errorMessage);
+        console.error('Error submitting miles request:', err);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -458,8 +498,13 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
 
   // Flight card component with new design (REMOVED BONUS MILES)
   const FlightCard = ({ flight }: { flight: any }) => {
-    const milesRequested = hasRequestForFlight(flight.flightNumber) || flight.milesRequested === true || flight.milesRequested === "pending";
-    const requestInfo = getRequestForFlight(flight.flightNumber);
+    const milesRequested = flight.milesRequested
+    const requestInfo = {
+      status: flight.requestEarnMilesStatus,
+      qualifyingMiles: flight.qualifyingMiles,
+      bonusMiles: flight.bonusMiles,
+      reason: "", // todo: flight.reason
+    }
     
     return (
       <Card className="hover:shadow-md transition-shadow">
@@ -601,18 +646,18 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="text-green-700">Qualifying Miles:</span>
-                          <span className="font-bold text-green-800 ml-1">{requestInfo.calculatedMiles.toLocaleString()}</span>
+                          <span className="font-bold text-green-800 ml-1">{requestInfo.qualifyingMiles.toLocaleString()}</span>
                         </div>
                         <div>
                           <span className="text-green-700">Bonus Miles:</span>
-                          <span className="font-bold text-green-800 ml-1">{(requestInfo.bonusMiles || requestInfo.calculatedMiles).toLocaleString()}</span>
+                          <span className="font-bold text-green-800 ml-1">{(requestInfo.bonusMiles || requestInfo.qualifyingMiles).toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
                   )}
-                  {requestInfo.status === 'waiting to confirm' && (
+                  {requestInfo.status === 'reviewing' && (
                     <p className="text-sm text-yellow-800">
-                      Miles request is pending approval. <span className="font-bold">{requestInfo.calculatedMiles.toLocaleString()} qualifying miles</span> and <span className="font-bold">{(requestInfo.bonusMiles || requestInfo.calculatedMiles).toLocaleString()} bonus miles</span> will be credited upon approval.
+                      Miles request is pending approval. <span className="font-bold">{requestInfo.qualifyingMiles.toLocaleString()} qualifying miles</span> and <span className="font-bold">{(requestInfo.bonusMiles || requestInfo.qualifyingMiles).toLocaleString()} bonus miles</span> will be credited upon approval.
                     </p>
                   )}
                   {requestInfo.status === 'rejected' && (
@@ -645,7 +690,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                   }`}>
                     {requestInfo.status === 'approved' && <CheckCircle className="h-4 w-4 mr-2" />}
                     {requestInfo.status === 'rejected' && <AlertCircle className="h-4 w-4 mr-2" />}
-                    {requestInfo.status === 'waiting to confirm' && <HourglassIcon className="h-4 w-4 mr-2" />}
+                    {requestInfo.status === 'reviewing' && <HourglassIcon className="h-4 w-4 mr-2" />}
                     <span className="text-sm">
                       {requestInfo.status === 'approved' ? 'Miles Completed' :
                        requestInfo.status === 'rejected' ? 'Miles Rejected' :
