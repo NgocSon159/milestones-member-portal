@@ -144,48 +144,21 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }: RegisterFormP
     if (!validateForm()) {
       return;
     }
-  
+
     setIsLoading(true);
-  
-    const apiData = {
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      email: formData.email,
-      phoneNumber: formData.phoneNumber,
-      password: formData.password,
-      dob: formData.birthday,
-      gender: formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1),
-      streetAddress: formData.address,
-      city: formData.city,
-      country: formData.country,
-      postalCode: formData.postalCode,
-      isAcceptRule: formData.agreeTerms,
-      isAcceptMKT: formData.agreeMarketing,
-    };
-  
+
     try {
-      const response = await fetch("https://mileswise-be.onrender.com/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(apiData),
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      toast.success("Registration successful! Welcome to Member Portal!");
+      
+      onRegisterSuccess({
+        email: formData.email,
+        name: `MR.${formData.firstName.toUpperCase()}`
       });
-  
-      if (response.ok) {
-        toast.success("Registration successful! Welcome to Member Portal!");
-        onRegisterSuccess({
-          email: formData.email,
-          name: `MR.${formData.firstName.toUpperCase()}`,
-        });
-      } else {
-        const errorData = await response.json();
-        const errorMessage = errorData.message || "Registration failed. Please try again.";
-        toast.error(errorMessage);
-      }
     } catch (error) {
-      console.error("Registration API error:", error);
-      toast.error("An unexpected error occurred. Please check your network and try again.");
+      toast.error("Registration failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
