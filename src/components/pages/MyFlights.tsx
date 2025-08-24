@@ -73,6 +73,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
     seatClass: ""
   });
   const [calculationResult, setCalculationResult] = useState<any>(null);
+  const [isCalculatingLoading, setIsCalculatingLoading] = useState(false); // New state for dialog loading
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -322,7 +323,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
 
   // Handle calculate miles
   const handleCalculateMiles = async () => {
-    setLoading(true);
+    setIsCalculatingLoading(true); // Use new loading state for dialog
     setError(null);
     
     try {
@@ -373,14 +374,14 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
       toast.error(errorMessage);
       console.error('Error calculating miles:', err);
     } finally {
-      setLoading(false);
+      setIsCalculatingLoading(false); // Reset new loading state
     }
   };
 
   // Handle earn miles submission
   const handleEarnMilesSubmit = async () => {
     if (calculationResult && flightFormData && selectedFlight) {
-      setLoading(true);
+      setIsCalculatingLoading(true); // Use new loading state for dialog
       setError(null);
       
       try {
@@ -418,7 +419,8 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
           serviceClass: flightFormData.class,
           seatClass: flightFormData.seatNumber.charAt(flightFormData.seatNumber.length - 1),
           distance: flightFormData.distance,
-          qualifyingMiles: calculationResult.qualifyingMiles,
+          calculatedMiles: calculationResult.qualifyingMiles,
+          bonusMiles: calculationResult.bonusMiles,
           status: 'waiting to confirm' as const
         });
         
@@ -427,6 +429,8 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
         setSelectedFlight(null);
         setDialogStep("form");
         setCalculationResult(null);
+        setSelectedTab("past"); // Set selected tab to 'past' after successful request
+        fetchFlights("completed"); // Re-fetch completed flights to update status after request
         
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'An error occurred while submitting miles request';
@@ -434,7 +438,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
         toast.error(errorMessage);
         console.error('Error submitting miles request:', err);
       } finally {
-        setLoading(false);
+        setIsCalculatingLoading(false); // Reset new loading state
       }
     }
   };
@@ -832,59 +836,71 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
 
             {/* Flight Lists */}
             <TabsContent value="upcoming" className="mt-6">
-              {(() => {
-                const pagination = getPagedFlights(upcomingFlights);
-                return (
-                  <div className="space-y-4">
-                    {pagination.data.map((flight) => (
+              {loading && <div className="text-center text-blue-500">Loading upcoming flights...</div>}
+              {error && <div className="text-center text-red-500">Error: {error}</div>}
+              {!loading && !error && (
+                <div className="space-y-4">
+                  {upcomingFlights.length === 0 ? (
+                    <p className="text-center text-gray-500">No upcoming flights found.</p>
+                  ) : (
+                    upcomingFlights.map((flight) => (
                       <FlightCard key={flight.id} flight={flight} />
-                    ))}
-                    {renderPagination(pagination)}
-                  </div>
-                );
-              })()}
+                    ))
+                  )}
+                  {renderPagination(getPagedFlights(upcomingFlights))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="ongoing" className="mt-6">
-              {(() => {
-                const pagination = getPagedFlights(ongoingFlights);
-                return (
-                  <div className="space-y-4">
-                    {pagination.data.map((flight) => (
+              {loading && <div className="text-center text-blue-500">Loading ongoing flights...</div>}
+              {error && <div className="text-center text-red-500">Error: {error}</div>}
+              {!loading && !error && (
+                <div className="space-y-4">
+                  {ongoingFlights.length === 0 ? (
+                    <p className="text-center text-gray-500">No ongoing flights found.</p>
+                  ) : (
+                    ongoingFlights.map((flight) => (
                       <FlightCard key={flight.id} flight={flight} />
-                    ))}
-                    {renderPagination(pagination)}
-                  </div>
-                );
-              })()}
+                    ))
+                  )}
+                  {renderPagination(getPagedFlights(ongoingFlights))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="past" className="mt-6">
-              {(() => {
-                const pagination = getPagedFlights(pastFlights);
-                return (
-                  <div className="space-y-4">
-                    {pagination.data.map((flight) => (
+              {loading && <div className="text-center text-blue-500">Loading completed flights...</div>}
+              {error && <div className="text-center text-red-500">Error: {error}</div>}
+              {!loading && !error && (
+                <div className="space-y-4">
+                  {pastFlights.length === 0 ? (
+                    <p className="text-center text-gray-500">No completed flights found.</p>
+                  ) : (
+                    pastFlights.map((flight) => (
                       <FlightCard key={flight.id} flight={flight} />
-                    ))}
-                    {renderPagination(pagination)}
-                  </div>
-                );
-              })()}
+                    ))
+                  )}
+                  {renderPagination(getPagedFlights(pastFlights))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="cancelled" className="mt-6">
-              {(() => {
-                const pagination = getPagedFlights(cancelledFlights);
-                return (
-                  <div className="space-y-4">
-                    {pagination.data.map((flight) => (
+              {loading && <div className="text-center text-blue-500">Loading cancelled flights...</div>}
+              {error && <div className="text-center text-red-500">Error: {error}</div>}
+              {!loading && !error && (
+                <div className="space-y-4">
+                  {cancelledFlights.length === 0 ? (
+                    <p className="text-center text-gray-500">No cancelled flights found.</p>
+                  ) : (
+                    cancelledFlights.map((flight) => (
                       <FlightCard key={flight.id} flight={flight} />
-                    ))}
-                    {renderPagination(pagination)}
-                  </div>
-                );
-              })()}
+                    ))
+                  )}
+                  {renderPagination(getPagedFlights(cancelledFlights))}
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -1138,10 +1154,9 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                 <Button 
                   onClick={handleCalculateMiles}
                   className="bg-blue-600 hover:bg-blue-700"
-                  disabled={!flightFormData.flightNumber || !flightFormData.distance || !flightFormData.class}
+                  disabled={!flightFormData.flightNumber || !flightFormData.distance || !flightFormData.class || isCalculatingLoading}
                 >
-                  <Calculator className="h-4 w-4 mr-2" />
-                  Calculate Miles
+                  <Calculator className="h-4 w-4 mr-2" />Calculate Miles
                 </Button>
               </>
             ) : (
@@ -1150,7 +1165,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                   <Edit className="h-4 w-4 mr-2" />
                   Edit Details
                 </Button>
-                <Button onClick={handleEarnMilesSubmit} className="bg-green-600 hover:bg-green-700">
+                <Button onClick={handleEarnMilesSubmit} className="bg-green-600 hover:bg-green-700" disabled={isCalculatingLoading}>
                   <Send className="h-4 w-4 mr-2" />
                   Submit Miles Request
                 </Button>
