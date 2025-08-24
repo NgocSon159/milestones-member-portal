@@ -38,21 +38,21 @@ interface MyVouchersProps {
 
 interface Voucher {
   id: string;
-  title: string;
-  description: string;
-  type: 'flight' | 'hotel' | 'car' | 'dining' | 'shopping';
-  discountType: 'percentage' | 'fixed';
-  discountValue: number;
-  code: string;
-  originalMiles: number;
-  claimedDate: string;
-  expiryDate: string;
+  title: string; // Mapped from rewardName
+  description: string; // Mapped from description
+  type: 'flight' | 'hotel' | 'car' | 'dining' | 'shopping'; // Mapped from rewardType
+  discountType: 'percentage' | 'fixed'; // Assuming 'voucher' type implies 'fixed' discount for now, can be refined. Or 'value' from API can be mapped here.
+  discountValue: number; // Mapped from value
+  code: string; // API response doesn't have a direct 'code', will use rewardId or generate one if needed. For now, will use a placeholder.
+  originalMiles: number; // Mapped from milesRequired
+  claimedDate: string; // Mapped from validFrom
+  expiryDate: string; // Mapped from validUntil
   usedDate?: string;
-  status: 'active' | 'used' | 'expired';
-  termsAndConditions: string[];
+  status: 'active' | 'used' | 'expired'; // Mapped from status
+  termsAndConditions: string[]; // Mapped from termsAndConditions
   detailedInfo?: {
-    provider: string;
-    category: string;
+    provider: string; // Not directly available, can be a placeholder or inferred
+    category: string; // Not directly available, can be a placeholder or inferred
     minimumSpend?: number;
     maximumDiscount?: number;
     validLocations?: string[];
@@ -71,233 +71,78 @@ export function MyVouchers({ user }: MyVouchersProps) {
   const [filterType, setFilterType] = useState<string>("all");
   const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Updated voucher data to match memberData.ts (22,500 total miles)
-  const [vouchers] = useState<Voucher[]>([
-    {
-      id: "voucher_001",
-      title: "Hotel Discount - 25% Off",
-      description: "Get 25% discount on hotel bookings worldwide",
-      type: "hotel",
-      discountType: "percentage",
-      discountValue: 25,
-      code: "HOTEL25OFF",
-      originalMiles: 5000,
-      claimedDate: "2024-08-10",
-      expiryDate: "2024-08-24", // 14 days from now (expiring soon)
-      status: "active",
-      termsAndConditions: [
-        "Valid for hotel bookings only",
-        "Minimum booking value of $100",
-        "Cannot be combined with other offers",
-        "Valid until expiry date"
-      ],
-      detailedInfo: {
-        provider: "Global Hotel Partners",
-        category: "Accommodation",
-        minimumSpend: 100,
-        maximumDiscount: 200,
-        validLocations: ["Vietnam", "Thailand", "Singapore", "Malaysia", "Philippines"],
-        customerService: {
-          phone: "+84 28 1234 5678",
-          email: "support@hotelpartners.com",
-          hours: "24/7 Support"
-        },
-        howToUse: [
-          "Visit participating hotel booking websites",
-          "Select your preferred hotel and dates",
-          "Enter voucher code 'HOTEL25OFF' at checkout",
-          "Discount will be applied automatically",
-          "Complete your booking with payment"
-        ],
-        restrictions: [
-          "Valid for new bookings only",
-          "Cannot be used for existing reservations",
-          "Not valid during peak seasons (Dec 20-Jan 5, Apr 10-30)",
-          "Maximum one voucher per booking",
-          "Subject to hotel availability"
-        ]
+  useEffect(() => {
+    const fetchVouchers = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const token = localStorage.getItem('token'); // Retrieve token from localStorage
+        if (!token) {
+          setError('No authentication token found.');
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch('https://mileswise-be.onrender.com/api/member/my-rewards', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const mappedVouchers: Voucher[] = data.map((item: any) => ({
+          id: item.id,
+          title: item.reward.rewardName,
+          description: item.reward.description,
+          type: item.reward.rewardType === 'voucher' ? 'shopping' : 'other', // Default to 'shopping' or 'other', refine if API provides more specific types
+          discountType: item.reward.value.includes('.') ? 'fixed' : 'fixed', // Assuming fixed for simplicity
+          discountValue: parseFloat(item.reward.value),
+          code: item.rewardId, // Using rewardId as code for now, as no direct code field
+          originalMiles: item.reward.milesRequired,
+          claimedDate: item.reward.validFrom,
+          expiryDate: item.reward.validUntil,
+          status: mapApiStatusToVoucherStatus(item.reward.validUntil, item.usedDate), // Map status based on expiry and usage
+          termsAndConditions: [item.reward.termsAndConditions], // Assuming termsAndConditions is a single string in API
+          detailedInfo: {
+            provider: item.reward.membershipInfo?.name || 'N/A', // Using membershipInfo.name as provider
+            category: item.reward.rewardName, // Using rewardName as category
+            howToUse: ["No specific instructions available."], // Placeholder
+            restrictions: ["No specific restrictions available."], // Placeholder
+            // Add other detailedInfo fields if available in API response
+          }
+        }));
+        setVouchers(mappedVouchers);
+      } catch (e: any) {
+        setError(e.message);
+        toast.error(`Failed to fetch vouchers: ${e.message}`);
+      } finally {
+        setLoading(false);
       }
-    },
-    {
-      id: "voucher_002",
-      title: "Flight Upgrade - Business Class",
-      description: "Complimentary upgrade to Business Class on domestic flights",
-      type: "flight",
-      discountType: "fixed",
-      discountValue: 0,
-      code: "UPGRADE2024",
-      originalMiles: 8000,
-      claimedDate: "2024-07-20",
-      expiryDate: "2024-12-31",
-      status: "active",
-      termsAndConditions: [
-        "Valid for domestic flights only",
-        "Subject to availability",
-        "Must be requested 48 hours before flight",
-        "One-time use only"
-      ],
-      detailedInfo: {
-        provider: "Vietnam Airlines",
-        category: "Flight Services",
-        validLocations: ["Vietnam Domestic Routes"],
-        customerService: {
-          phone: "+84 1900 1100",
-          email: "customer.service@vietnamairlines.com",
-          hours: "6:00 AM - 10:00 PM (GMT+7)"
-        },
-        howToUse: [
-          "Call Vietnam Airlines reservation center",
-          "Provide your booking reference and voucher code",
-          "Request upgrade at least 48 hours before departure",
-          "Confirm upgrade availability",
-          "Receive confirmation via email or SMS"
-        ],
-        restrictions: [
-          "Domestic flights within Vietnam only",
-          "Must have existing Economy booking",
-          "Subject to Business Class seat availability",
-          "Cannot be transferred to another person",
-          "Valid for one-way upgrade only"
-        ]
-      }
-    },
-    {
-      id: "voucher_003",
-      title: "Car Rental - 20% Off",
-      description: "20% discount on car rental services",
-      type: "car",
-      discountType: "percentage",
-      discountValue: 20,
-      code: "CAR20OFF",
-      originalMiles: 3000,
-      claimedDate: "2024-07-15",
-      expiryDate: "2024-10-15",
-      usedDate: "2024-08-01",
-      status: "used",
-      termsAndConditions: [
-        "Valid for car rentals only",
-        "Minimum rental period of 3 days",
-        "Valid at participating locations",
-        "Cannot be refunded"
-      ],
-      detailedInfo: {
-        provider: "Southeast Asia Car Rental",
-        category: "Transportation",
-        minimumSpend: 150,
-        maximumDiscount: 100,
-        validLocations: ["Ho Chi Minh City", "Hanoi", "Da Nang", "Nha Trang", "Bangkok", "Singapore"],
-        customerService: {
-          phone: "+84 28 9876 5432",
-          email: "info@seacarrental.com",
-          hours: "8:00 AM - 8:00 PM (GMT+7)"
-        },
-        howToUse: [
-          "Visit our website or call our booking center",
-          "Select pickup location, dates, and vehicle type",
-          "Enter voucher code 'CAR20OFF' during booking",
-          "Complete booking with valid driver's license",
-          "Pick up vehicle at designated location"
-        ],
-        restrictions: [
-          "Valid driver's license required",
-          "Minimum age 21 years",
-          "Credit card required for security deposit",
-          "Fuel policy: return with same fuel level",
-          "Late return charges may apply"
-        ]
-      }
-    },
-    {
-      id: "voucher_004",
-      title: "Dining Voucher - $50 Credit",
-      description: "$50 credit for restaurant dining",
-      type: "dining",
-      discountType: "fixed",
-      discountValue: 50,
-      code: "DINING50",
-      originalMiles: 4000,
-      claimedDate: "2024-06-01",
-      expiryDate: "2024-07-31",
-      status: "expired",
-      termsAndConditions: [
-        "Valid at participating restaurants",
-        "Cannot be used for alcohol",
-        "Minimum bill of $100",
-        "One-time use only"
-      ],
-      detailedInfo: {
-        provider: "Premium Dining Network",
-        category: "Food & Beverage",
-        minimumSpend: 100,
-        validLocations: ["Ho Chi Minh City", "Hanoi", "Da Nang"],
-        customerService: {
-          phone: "+84 28 5555 0123",
-          email: "dine@premiumnetwork.vn",
-          hours: "10:00 AM - 10:00 PM (GMT+7)"
-        },
-        howToUse: [
-          "Visit any participating restaurant",
-          "Browse our restaurant directory online",
-          "Make reservation mentioning voucher code",
-          "Present voucher code to server before ordering",
-          "Credit will be applied to final bill"
-        ],
-        restrictions: [
-          "Not valid for alcoholic beverages",
-          "Cannot be combined with other promotions",
-          "Advance reservation recommended",
-          "Gratuity not included in credit",
-          "Valid for dine-in only, not for takeaway"
-        ]
-      }
-    },
-    {
-      id: "voucher_005",
-      title: "Shopping Discount - 15% Off",
-      description: "15% discount on online shopping",
-      type: "shopping",
-      discountType: "percentage",
-      discountValue: 15,
-      code: "SHOP15OFF",
-      originalMiles: 2500,
-      claimedDate: "2024-08-05",
-      expiryDate: "2024-08-20", // 8 days from now (expiring soon)
-      status: "active",
-      termsAndConditions: [
-        "Valid for online purchases only",
-        "Minimum purchase of $75",
-        "Excludes sale items",
-        "Valid until expiry date"
-      ],
-      detailedInfo: {
-        provider: "E-Commerce Partners",
-        category: "Retail Shopping",
-        minimumSpend: 75,
-        maximumDiscount: 150,
-        validLocations: ["Vietnam", "International Shipping Available"],
-        customerService: {
-          phone: "+84 1800 6789",
-          email: "support@ecommercepartners.com",
-          hours: "9:00 AM - 6:00 PM (GMT+7), Mon-Fri"
-        },
-        howToUse: [
-          "Visit participating online stores",
-          "Add items to your shopping cart",
-          "Proceed to checkout",
-          "Enter voucher code 'SHOP15OFF' in promo code field",
-          "Complete purchase with payment method"
-        ],
-        restrictions: [
-          "Online purchases only",
-          "Cannot be used in physical stores",
-          "Excludes already discounted items",
-          "Shipping fees not included in discount",
-          "Return policy as per merchant terms"
-        ]
-      }
+    };
+
+    fetchVouchers();
+  }, []); // Empty dependency array means this effect runs once on mount
+
+  // Helper function to map API status to Voucher status
+  const mapApiStatusToVoucherStatus = (expiryDate: string, usedDate?: string) => {
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    if (usedDate) {
+      return 'used';
     }
-  ]);
+    if (expiry < today) {
+      return 'expired';
+    }
+    return 'active';
+  };
 
   // Get vouchers by status
   const getVouchersByStatus = (status: string) => {
@@ -555,7 +400,7 @@ export function MyVouchers({ user }: MyVouchersProps) {
         <Card>
           <CardContent className="p-4 text-center">
             <div className="text-2xl font-bold text-purple-600">
-              22,500
+              {vouchers.reduce((sum, voucher) => sum + voucher.originalMiles, 0).toLocaleString()}
             </div>
             <p className="text-sm text-gray-600">Total Miles Used</p>
           </CardContent>
