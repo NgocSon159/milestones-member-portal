@@ -1,5 +1,9 @@
 // Shared member data calculation function
-export const getMemberData = (requests: any[], memberProfile: any, dashboardData: any) => {
+export const getMemberData = (
+  requests: any[],
+  memberProfile: any,
+  dashboardData: any
+) => {
   const approvedRequests = requests.filter(request => request.status === 'approved');
 
   // Calculate total qualifying miles (for tier calculation)

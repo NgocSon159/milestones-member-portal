@@ -133,6 +133,17 @@ export function History() {
   // Get member data for miles calculations
   const memberData = getMemberData(apiRequests, {}, {});
 
+  // Calculate total qualifying miles for this page only
+  const historyTotalQualifyingMiles = apiRequests.filter(request => request.status === 'approved').reduce((sum, request) => {
+    const baseDistance = request.flightInfo?.calculationDetails?.baseDistance ?? 0;
+    return sum + baseDistance;
+  }, 0);
+
+  // Calculate total bonus miles for this page only
+  const historyTotalBonusMiles = apiRequests.filter(request => request.status === 'approved').reduce((sum, request) => {
+    const totalMiles = request.flightInfo?.calculationDetails?.totalMiles ?? 0;
+    return sum + totalMiles;
+  }, 0);
   // Reset pagination when tab or filter changes
   useEffect(() => {
     setCurrentPage(1);
@@ -429,7 +440,7 @@ export function History() {
             <div className="space-y-3">
               <div className="text-center">
                 <div className="text-4xl font-bold text-blue-600 mb-2">
-                  {memberData.totalQualifyingMiles.toLocaleString()}
+                  {historyTotalQualifyingMiles.toLocaleString()}
                 </div>
                 <p className="text-sm text-blue-700">Total Qualifying Miles</p>
                 <p className="text-xs text-blue-600">From {memberData.completedFlightsCount} completed flights</p>
@@ -437,15 +448,15 @@ export function History() {
               <div className="bg-white/50 rounded-lg p-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-blue-700">Current Tier:</span>
-                  <span className="font-semibold text-blue-900">{memberData.currentTier}</span>
+                  <span className="font-semibold text-blue-900">Silver</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-blue-700">Next Tier:</span>
-                  <span className="font-semibold text-blue-900">{memberData.nextTier}</span>
+                  <span className="font-semibold text-blue-900">Gold</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-blue-700">Miles Needed:</span>
-                  <span className="font-semibold text-purple-600">{memberData.milesToNextTier.toLocaleString()}</span>
+                  <span className="font-semibold text-purple-600">{(25000 - historyTotalQualifyingMiles).toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -465,7 +476,7 @@ export function History() {
             <div className="space-y-3">
               <div className="text-center">
                 <div className="text-4xl font-bold text-green-600 mb-2">
-                  {memberData.totalBonusMiles.toLocaleString()}
+                  {historyTotalBonusMiles.toLocaleString()}
                 </div>
                 <p className="text-sm text-green-700">Total Bonus Miles</p>
                 <p className="text-xs text-green-600">Calculated using Vietnam Airlines service class multipliers</p>
