@@ -412,7 +412,7 @@ export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProp
               </div>
               <div className="text-right">
                 <div className={`text-xl font-bold ${isLoyalty ? 'text-green-600' : 'text-blue-600'} mb-1`}>
-                  {voucher.value}
+                  {voucher.value}$
                 </div>
                 {isLoyalty && (
                   <Badge className="bg-green-100 text-green-700 text-xs">

@@ -6,8 +6,8 @@ import {
   Star,
   Trophy,
   Gift,
-  Clock,
-  Calendar,
+  // Clock,
+  // Calendar,
   Award,
   User,
   Plane,
@@ -16,93 +16,84 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { useEarnMiles } from "./EarnMilesContext";
 import { getMemberData } from "./shared/memberData";
+import axios from "axios";
+import { useState, useEffect } from "react";
 
 interface DashboardProps {
-  user: {
-    email: string;
-    name: string;
-  };
+  // user: {
+  //   email: string;
+  //   name: string;
+  // };
   onPageChange?: (page: string, params?: any) => void;
 }
 
 // Generate chart data that matches the exact totals from member data
-const generateChartDataFromRequests = (requests: any[], memberData: any) => {
+const generateChartDataFromRequests = (requests: any[], dashboardData: any) => {
   const approvedRequests = requests.filter(request => request.status === 'approved');
   
   // Group requests by month and calculate actual earned miles
   const monthlyData: { [key: string]: { 
     qualifyingMiles: number, 
     bonusMiles: number, 
-    redeemed: number, 
-    available: number 
+    redeemed: number,
+    // available: number 
   } } = {};
   
-  // Initialize months
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  months.forEach(month => {
-    monthlyData[month] = { qualifyingMiles: 0, bonusMiles: 0, redeemed: 0, available: 0 };
+  // Initialize months and populate with API data
+  const months: string[] = dashboardData && dashboardData.chartInfo ? dashboardData.chartInfo.map((item: any) => item.month) : [];
+  months.forEach((month: string) => {
+    monthlyData[month] = { qualifyingMiles: 0, bonusMiles: 0, redeemed: 0/*, available: 0*/ };
   });
   
-  // Process approved requests to get real earned miles per month
+  // Process approved requests to get real earned miles per month (This part might be redundant if API provides all data)
+  // Keeping it for now, but will check if it's needed after full integration
+  /*
   approvedRequests.forEach(request => {
     const date = new Date(request.departureDate);
     const monthIndex = date.getMonth();
-    const monthName = months[monthIndex];
+    const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][monthIndex];
     
     if (monthlyData[monthName]) {
       monthlyData[monthName].qualifyingMiles += request.calculatedMiles;
       monthlyData[monthName].bonusMiles += (request.bonusMiles || request.calculatedMiles);
     }
   });
-  
-  // Get months that have earned miles
-  const activeMonths = months.filter(month => monthlyData[month].qualifyingMiles > 0 || monthlyData[month].bonusMiles > 0);
-  
-  // Distribute total redeemed, expiring, and available across active months proportionally
-  const totalQualifyingInChart = Object.values(monthlyData).reduce((sum, data) => sum + data.qualifyingMiles, 0);
-  const totalBonusInChart = Object.values(monthlyData).reduce((sum, data) => sum + data.bonusMiles, 0);
-  
-  // If we have earned miles, distribute other metrics proportionally
-  if ((totalQualifyingInChart > 0 || totalBonusInChart > 0) && activeMonths.length > 0) {
-    // Distribute miles redeemed and available across months
-    let remainingRedeemed = memberData.totalMilesRedeemed;
-    let remainingAvailable = memberData.milesExpiringEndOfYear; // Using expiring miles as available miles
-    
-    activeMonths.forEach((month, index) => {
-      const monthBonus = monthlyData[month].bonusMiles;
-      const proportion = totalBonusInChart > 0 ? monthBonus / totalBonusInChart : 1 / activeMonths.length;
-      
-      if (index === activeMonths.length - 1) {
-        // Last month gets remaining to ensure exact total
-        monthlyData[month].redeemed = remainingRedeemed;
-        monthlyData[month].available = remainingAvailable;
-      } else {
-        const monthRedeemed = Math.floor(memberData.totalMilesRedeemed * proportion);
-        const monthAvailable = Math.floor(memberData.milesExpiringEndOfYear * proportion);
-        
-        monthlyData[month].redeemed = monthRedeemed;
-        monthlyData[month].available = monthAvailable;
-        
-        remainingRedeemed -= monthRedeemed;
-        remainingAvailable -= monthAvailable;
+  */
+  // Use dashboardData.chartInfo if available to override/set the data
+  if (dashboardData && dashboardData.chartInfo) {
+    dashboardData.chartInfo.forEach((chartItem: any) => {
+      const monthName = chartItem.month;
+      // Ensure the month exists in our generated months array, if not, add it.
+      if (!months.includes(monthName)) {
+          months.push(monthName);
+          monthlyData[monthName] = { qualifyingMiles: 0, bonusMiles: 0, redeemed: 0 };
       }
+      monthlyData[monthName].qualifyingMiles = chartItem.qualifyingMiles;
+      monthlyData[monthName].bonusMiles = chartItem.bonusMiles;
+      monthlyData[monthName].redeemed = chartItem.redeemedMiles;
     });
   }
   
-  // Return only months with data or recent months for better visualization
-  return months.map(month => ({
+  // Get months that have earned miles - now considering only months from API
+  const chartMonths = months.filter((month: string) => monthlyData[month].qualifyingMiles > 0 || monthlyData[month].bonusMiles > 0 || monthlyData[month].redeemed > 0);
+  
+  // Distribute total redeemed, expiring, and available across active months proportionally
+  const totalQualifyingInChart = Object.values(monthlyData).reduce((sum: number, data: any) => sum + data.qualifyingMiles, 0);
+  const totalBonusInChart = Object.values(monthlyData).reduce((sum: number, data: any) => sum + data.bonusMiles, 0);
+  
+  // If we have earned miles, distribute other metrics proportionally
+  if ((totalQualifyingInChart > 0 || totalBonusInChart > 0) && chartMonths.length > 0) {
+    // Removed if block that was causing linter error
+  }
+  
+  // Return only months with data (based on API data)
+  return chartMonths.map((month: string) => ({
     month,
     qualifyingMiles: monthlyData[month].qualifyingMiles,
     bonusMiles: monthlyData[month].bonusMiles,
     redeemed: monthlyData[month].redeemed,
-    available: monthlyData[month].available
-  })).filter(data => 
-    data.qualifyingMiles > 0 || 
-    data.bonusMiles > 0 ||
-    data.redeemed > 0 || 
-    data.available > 0 ||
-    ['Aug', 'Sep', 'Oct', 'Nov', 'Dec'].includes(data.month)
-  );
+    // available: monthlyData[month].available
+  }));
 };
 
 const getTierInfo = (tier: string) => {
@@ -118,14 +109,93 @@ const getTierInfo = (tier: string) => {
   }
 };
 
-export function Dashboard({ user, onPageChange }: DashboardProps) {
+export function Dashboard({ onPageChange }: DashboardProps) {
   const { requests } = useEarnMiles();
+  const [memberProfile, setMemberProfile] = useState<any>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [completedFlights, setCompletedFlights] = useState<any[]>([]);
+  const [upcomingFlights, setUpcomingFlights] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get(
+          "https://mileswise-be.onrender.com/api/member/profile",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setMemberProfile(response.data);
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+      }
+    };
+
+    const fetchDashboardData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get(
+          "https://mileswise-be.onrender.com/api/member/dashboard",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setDashboardData(response.data);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      }
+    };
+
+    const fetchCompletedFlights = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get(
+          "https://mileswise-be.onrender.com/api/member/my-flights?status=completed",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setCompletedFlights(response.data);
+      } catch (error) {
+        console.error("Error fetching completed flights:", error);
+      }
+    };
+
+    const fetchUpcomingFlights = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get(
+          "https://mileswise-be.onrender.com/api/member/my-flights?status=upcoming",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setUpcomingFlights(response.data);
+      } catch (error) {
+        console.error("Error fetching upcoming flights:", error);
+      }
+    };
+
+    fetchUserProfile();
+    fetchDashboardData();
+    fetchCompletedFlights();
+    fetchUpcomingFlights();
+  }, []);
 
   // Use shared member data calculation
-  const memberData = getMemberData(requests);
+  const memberData = getMemberData(requests, memberProfile, dashboardData);
 
   // Generate chart data that matches exact totals
-  const milesChartData = generateChartDataFromRequests(requests, memberData);
+  const milesChartData = generateChartDataFromRequests(requests, dashboardData);
 
   const tierInfo = getTierInfo(memberData.currentTier);
   const TierIcon = tierInfo.icon;
@@ -262,7 +332,7 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
               className="cursor-pointer hover:shadow-sm transition-shadow p-3 border-blue-200"
               onClick={() => handleMetricClick("total-miles")}
             >
-              <div className="text-center">
+              <div className="flex flex-col items-center">
                 <div className="flex items-center justify-center mb-1">
                   <Award className="h-4 w-4 text-blue-500 mr-1" />
                   <span className="text-xs font-medium text-gray-600">Qualifying</span>
@@ -277,7 +347,7 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
               className="cursor-pointer hover:shadow-sm transition-shadow p-3 border-green-200"
               onClick={() => handleMetricClick("bonus-miles")}
             >
-              <div className="text-center">
+              <div className="flex flex-col items-center">
                 <div className="flex items-center justify-center mb-1">
                   <Star className="h-4 w-4 text-green-500 mr-1" />
                   <span className="text-xs font-medium text-gray-600">Bonus</span>
@@ -292,7 +362,7 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
               className="cursor-pointer hover:shadow-sm transition-shadow p-3 border-purple-200"
               onClick={() => handleMetricClick("miles-redeemed")}
             >
-              <div className="text-center">
+              <div className="flex flex-col items-center">
                 <div className="flex items-center justify-center mb-1">
                   <Gift className="h-4 w-4 text-purple-500 mr-1" />
                   <span className="text-xs font-medium text-gray-600">Redeemed</span>
@@ -303,7 +373,7 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
             </Card>
 
             {/* Available Miles - Compact - Match RedeemVoucher Display */}
-            <Card 
+            {/* <Card 
               className="cursor-pointer hover:shadow-sm transition-shadow p-3 border-red-200"
               onClick={() => handleMetricClick("available-miles")}
             >
@@ -315,7 +385,7 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
                 <p className="text-lg font-bold text-red-600">{memberData.milesExpiringEndOfYear.toLocaleString()}</p>
                 <p className="text-xs text-red-500">Expiring this year</p>
               </div>
-            </Card>
+            </Card> */}
           </div>
 
           {/* Chart */}
@@ -351,45 +421,8 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
                   strokeWidth={3}
                   name="Miles Redeemed"
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="available" 
-                  stroke="#EF4444" 
-                  strokeWidth={3}
-                  name="Available Miles"
-                />
               </LineChart>
             </ResponsiveContainer>
-          </div>
-
-          {/* Chart Summary to verify totals */}
-          <div className="mt-4 pt-4 border-t">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div>
-                <p className="text-sm text-gray-500">Chart Qualifying</p>
-                <p className="font-medium text-blue-600">
-                  {milesChartData.reduce((sum, data) => sum + data.qualifyingMiles, 0).toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Chart Bonus</p>
-                <p className="font-medium text-green-600">
-                  {milesChartData.reduce((sum, data) => sum + data.bonusMiles, 0).toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Chart Redeemed</p>
-                <p className="font-medium text-purple-600">
-                  {milesChartData.reduce((sum, data) => sum + data.redeemed, 0).toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Chart Available</p>
-                <p className="font-medium text-red-600">
-                  {milesChartData.reduce((sum, data) => sum + data.available, 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -447,22 +480,21 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
           <CardContent>
             <div className="space-y-3">
               {/* Show latest approved flight requests */}
-              {requests
-                .filter(request => request.status === 'approved')
+              {completedFlights
                 .slice(0, 4)
-                .map((request, index) => (
-                  <div key={request.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
+                .map((flight) => (
+                  <div key={flight.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
                     <div className="flex items-center space-x-3">
                       <div className="p-1 bg-blue-100 rounded-full">
                         <Plane className="h-3 w-3 text-blue-600" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium">{request.from.split(' - ')[1]} → {request.to.split(' - ')[1]}</p>
-                        <p className="text-xs text-gray-500">Flight {request.flightNumber} • {request.serviceClass}</p>
+                        <p className="text-sm font-medium">{flight.departureInfo.city} → {flight.arrivalInfo.city}</p>
+                        <p className="text-xs text-gray-500">Flight {flight.flightNumber} • {flight.serviceClass}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-green-600">+{request.calculatedMiles.toLocaleString()}</p>
+                      <p className="text-sm font-semibold text-green-600">+{flight.qualifyingMiles.toLocaleString()}</p>
                       <p className="text-xs text-gray-500">miles</p>
                     </div>
                   </div>
@@ -487,37 +519,23 @@ export function Dashboard({ user, onPageChange }: DashboardProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div className="flex items-center space-x-4">
-                <div className="p-2 bg-blue-100 rounded-full">
-                  <Plane className="h-5 w-5 text-blue-600" />
+            {upcomingFlights.slice(0, 2).map((flight) => (
+              <div key={flight.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex items-center space-x-4">
+                  <div className="p-2 bg-blue-100 rounded-full">
+                    <Plane className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium">{flight.departureInfo.city} → {flight.arrivalInfo.city}</p>
+                    <p className="text-sm text-gray-600">{new Date(flight.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} • {flight.flightNumber}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium">Ho Chi Minh City → Bangkok</p>
-                  <p className="text-sm text-gray-600">Dec 25, 2024 • VN123</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="font-medium text-green-600">Confirmed</p>
-                <p className="text-sm text-gray-600">Seat 15A • +2,450 miles</p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div className="flex items-center space-x-4">
-                <div className="p-2 bg-blue-100 rounded-full">
-                  <Plane className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="font-medium">Bangkok → Ho Chi Minh City</p>
-                  <p className="text-sm text-gray-600">Jan 5, 2025 • VN456</p>
+                <div className="text-right">
+                  <p className={`font-medium ${flight.status === 'upcoming' ? 'text-blue-600' : 'text-green-600'}`}>{flight.status === 'upcoming' ? 'Scheduled' : 'Confirmed'}</p>
+                  <p className="text-sm text-gray-600">Seat {flight.seat} • +{flight.bonusMiles.toLocaleString()} miles</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="font-medium text-blue-600">Scheduled</p>
-                <p className="text-sm text-gray-600">Seat 12C • +2,180 miles</p>
-              </div>
-            </div>
+            ))}
           </div>
         </CardContent>
       </Card>

@@ -5,15 +5,12 @@ import { Badge } from "../ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "../ui/pagination";
-import { useEarnMiles } from "../EarnMilesContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "../ui/pagination";
 import { getMemberData } from "../shared/memberData";
 import { 
   CheckCircle, 
   Clock, 
-  XCircle, 
   AlertCircle, 
   Plane,
   Calendar,
@@ -25,8 +22,38 @@ import {
   Eye,
   Search,
   Star,
-  TrendingUp
 } from "lucide-react";
+
+interface FlightInfo {
+  to: string;
+  from: string;
+  airline: string;
+  distance: number;
+  milesEarn: number;
+  seatClass: string;
+  flightNumber: string;
+  serviceClass: string;
+  departureDate: string;
+  calculationDetails: {
+    totalMiles: number;
+    baseDistance: number;
+  };
+}
+
+interface ApiRequest {
+  id: string;
+  requestNumber: string;
+  description: string | null;
+  customerFlightId: number;
+  flightInfo: FlightInfo;
+  status: string;
+  rejectReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  flightId: string | null;
+  customerId: string;
+}
 
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -55,19 +82,56 @@ const getStatusColor = (status: string) => {
 };
 
 export function History() {
-  const { requests } = useEarnMiles();
   const [selectedTab, setSelectedTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [dateFilter, setDateFilter] = useState({ from: "", to: "" });
-  
+  const [apiRequests, setApiRequests] = useState<ApiRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  
+
+  useEffect(() => {
+    const fetchRequests = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          throw new Error("Authorization token not found.");
+        }
+
+        const response = await fetch(
+          "https://mileswise-be.onrender.com/api/member/request-earn-miles",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Error: ${response.statusText}`);
+        }
+
+        const data: ApiRequest[] = await response.json();
+        setApiRequests(data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRequests();
+  }, []);
+
   // Get member data for miles calculations
-  const memberData = getMemberData(requests);
+  const memberData = getMemberData(apiRequests, {}, {});
 
   // Reset pagination when tab or filter changes
   useEffect(() => {
@@ -75,24 +139,35 @@ export function History() {
   }, [selectedTab, dateFilter, searchTerm]);
 
   // Convert earn miles requests to history format
-  const earnMilesHistory = requests.map(request => ({
+  const earnMilesHistory = apiRequests.map(request => ({
     id: request.id,
     type: "Earn Miles Request",
-    flightNumber: request.flightNumber,
-    description: `Request ${request.calculatedMiles.toLocaleString()} miles for flight ${request.flightNumber} (${request.serviceClass} - ${request.seatClass})`,
-    submittedDate: request.submittedDate + "T00:00:00",
-    status: request.status === 'waiting to confirm' ? 'waiting to confirm' : request.status === 'approved' ? 'approved' : 'rejected',
-    statusDate: request.processedDate ? request.processedDate + "T00:00:00" : request.submittedDate + "T00:00:00",
-    priority: "Normal",
-    category: "Miles & Rewards",
-    earnMilesData: request
+    flightNumber: request.flightInfo.flightNumber,
+    description: request.description || `Request ${request.flightInfo.milesEarn.toLocaleString()} miles for flight ${request.flightInfo.flightNumber} (${request.flightInfo.serviceClass} - ${request.flightInfo.seatClass})`,
+    submittedDate: request.createdAt,
+    status: request.status === 'reviewing' ? 'waiting to confirm' : request.status,
+    statusDate: request.updatedAt,
+    priority: "Normal", // API does not provide priority
+    category: "Miles & Rewards", // API does not provide category
+    earnMilesData: {
+      calculatedMiles: request.flightInfo.milesEarn,
+      bonusMiles: (request.flightInfo.calculationDetails?.totalMiles || 0) - request.flightInfo.milesEarn, // Assuming bonus miles is the difference
+      flightNumber: request.flightInfo.flightNumber,
+      from: request.flightInfo.from,
+      to: request.flightInfo.to,
+      serviceClass: request.flightInfo.serviceClass,
+      seatClass: request.flightInfo.seatClass,
+      airline: request.flightInfo.airline,
+      departureDate: request.flightInfo.departureDate,
+      distance: request.flightInfo.distance,
+      processedDate: request.updatedAt,
+      reason: request.rejectReason,
+      baseDistance: request.flightInfo.calculationDetails?.baseDistance ?? 0,
+      totalMiles: request.flightInfo.calculationDetails?.totalMiles ?? 0,
+    }
   }));
 
   // Calculate total approved miles
-  const totalApprovedMiles = earnMilesHistory
-    .filter(request => request.status === "approved")
-    .reduce((total, request) => total + (request.earnMilesData?.calculatedMiles || 0), 0);
-
   const statusCounts = {
     all: earnMilesHistory.length,
     approved: earnMilesHistory.filter(r => r.status === "approved").length,
@@ -243,7 +318,7 @@ export function History() {
                 <div>
                   <p className="text-xs text-gray-500">Route</p>
                   <p className="text-sm font-medium">
-                    {request.earnMilesData.from.split(' - ')[0]} → {request.earnMilesData.to.split(' - ')[0]}
+                    {(request.earnMilesData.from?.split(' - ')[0] || '')} → {(request.earnMilesData.to?.split(' - ')[0] || '')}
                   </p>
                 </div>
                 <div>
@@ -600,6 +675,8 @@ export function History() {
 
       {/* Detail Dialog */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+        {loading && <div className="p-6 text-center text-gray-500">Loading requests...</div>}
+        {error && <div className="p-6 text-center text-red-500">Error: {error}</div>}
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">

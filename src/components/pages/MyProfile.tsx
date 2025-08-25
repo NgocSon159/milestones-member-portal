@@ -90,14 +90,14 @@ export function MyProfile({ user, onLogout, onNameUpdate }: MyProfileProps) {
             firstName: data.firstName || "",
             lastName: data.lastName || "",
             email: data.email || user.email,
-            phone: data.phone || "",
+            phone: data.phoneNumber || "",
             address: data.streetAddress || "",
             city: data.city || "",
             country: data.country || "",
             dateOfBirth: data.dob ? new Date(data.dob).toISOString().split('T')[0] : "",
-            memberSince: data.memberSince ? new Date(data.memberSince).toISOString().split('T')[0] : "",
-            tier: data.tier || "Standard",
-            memberNumber: data.memberNumber || "N/A"
+            memberSince: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : "",
+            tier: data.memberships && data.memberships.length > 0 ? data.memberships[0].name : "Standard",
+            memberNumber: data.id || "N/A"
           });
         } else {
           const errorData = await response.json();
