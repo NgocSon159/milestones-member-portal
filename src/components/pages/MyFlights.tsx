@@ -245,15 +245,12 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
       if (completedFlightFilter === "not-requested") {
         // Flights that haven't requested miles OR actual context flights that haven't been requested
         filtered = filtered.filter(flight => 
-          flight.milesRequested === false || 
-          (!hasRequestForFlight(flight.flightNumber) && flight.milesRequested !== "pending")
+          !flight.milesRequested
         );
       } else if (completedFlightFilter === "requested") {
         // Flights with pending miles requests OR flights that have been requested in context
         filtered = filtered.filter(flight => 
-          flight.milesRequested === "pending" || 
-          flight.milesRequested === true ||
-          hasRequestForFlight(flight.flightNumber)
+          flight.milesRequested
         );
       }
       // "all" shows all completed flights
@@ -942,6 +939,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                       value={flightFormData.flightNumber}
                       onChange={(e) => handleFormFieldChange('flightNumber', e.target.value)}
                       placeholder="e.g. VN123"
+                      readOnly
                     />
                   </div>
                   
@@ -952,6 +950,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                       value={flightFormData.airline}
                       onChange={(e) => handleFormFieldChange('airline', e.target.value)}
                       placeholder="e.g. Vietnam Airlines"
+                      readOnly
                     />
                   </div>
                   
@@ -962,6 +961,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                       value={flightFormData.from}
                       onChange={(e) => handleFormFieldChange('from', e.target.value)}
                       placeholder="e.g. HAN - Hanoi"
+                      readOnly
                     />
                   </div>
                   
@@ -972,6 +972,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                       value={flightFormData.to}
                       onChange={(e) => handleFormFieldChange('to', e.target.value)}
                       placeholder="e.g. SGN - Ho Chi Minh City"
+                      readOnly
                     />
                   </div>
                   
@@ -982,6 +983,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                       type="date"
                       value={flightFormData.departureDate}
                       onChange={(e) => handleFormFieldChange('departureDate', e.target.value)}
+                      readOnly
                     />
                   </div>
                   
@@ -991,7 +993,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                       value={flightFormData.class} 
                       onValueChange={(value) => handleFormFieldChange('class', value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger disabled>
                         <SelectValue placeholder="Select class" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1010,6 +1012,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                       value={flightFormData.distance}
                       onChange={(e) => handleFormFieldChange('distance', parseInt(e.target.value) || 0)}
                       placeholder="e.g. 1200"
+                      readOnly
                     />
                   </div>
                   
@@ -1020,6 +1023,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                       value={flightFormData.seatNumber}
                       onChange={(e) => handleFormFieldChange('seatNumber', e.target.value)}
                       placeholder="e.g. 12A"
+                      readOnly
                     />
                   </div>
                   <div className="space-y-2">
@@ -1029,6 +1033,7 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
                         value={flightFormData.seatClass}
                         onChange={(e) => handleFormFieldChange('seatClass', e.target.value)}
                         placeholder="e.g. L"
+                        readOnly
                     />
                   </div>
                 </div>
