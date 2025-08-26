@@ -45,11 +45,9 @@ const navigationItems = [
   { key: "dashboard", label: "Dashboard", icon: Home },
   { key: "profile", label: "My Profile", icon: User },
   { key: "flights", label: "My Flights", icon: Calendar },
-  { key: "notifications", label: "Notifications", icon: Bell },
   { key: "redeem", label: "Redeem Voucher", icon: Award },
   { key: "my-vouchers", label: "My Vouchers", icon: Ticket },
   { key: "history", label: "History My Request", icon: History },
-  { key: "support", label: "Support Chat", icon: MessageCircle },
 ];
 
 export function Layout({ children, user, currentPage, onPageChange, onLogout }: LayoutProps) {

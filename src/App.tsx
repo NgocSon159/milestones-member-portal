@@ -135,16 +135,12 @@ export default function App() {
         return <MyProfile user={user} onLogout={handleLogout} onNameUpdate={handleNameUpdate} />;
       case "flights":
         return <MyFlights onPageChange={handlePageChange} initialTab={pageParams.tab} initialFilter={pageParams.filter} />;
-      case "notifications":
-        return <Notifications user={user} memberName={memberName} />;
       case "redeem":
         return <RedeemVoucher user={user} section={pageParams.section} onPageChange={handlePageChange} />;
       case "my-vouchers":
         return <MyVouchers user={user} />;
       case "history":
         return <History />;
-      case "support":
-        return <SupportChat />;
       case "reward-details":
         return <RewardDetails onPageChange={handlePageChange} />;
       default:

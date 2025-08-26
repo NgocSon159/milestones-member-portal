@@ -97,7 +97,7 @@ export function MyProfile({ user, onLogout, onNameUpdate }: MyProfileProps) {
             dateOfBirth: data.dob ? new Date(data.dob).toISOString().split('T')[0] : "",
             memberSince: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : "",
             tier: data.memberships && data.memberships.length > 0 ? data.memberships[0].name : "Standard",
-            memberNumber: data.id || "N/A"
+            memberNumber: data.customerNumber || "N/A"
           });
         } else {
           const errorData = await response.json();

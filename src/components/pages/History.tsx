@@ -445,20 +445,6 @@ export function History() {
                 <p className="text-sm text-blue-700">Total Qualifying Miles</p>
                 <p className="text-xs text-blue-600">From {memberData.completedFlightsCount} completed flights</p>
               </div>
-              <div className="bg-white/50 rounded-lg p-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-blue-700">Current Tier:</span>
-                  <span className="font-semibold text-blue-900">Silver</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-blue-700">Next Tier:</span>
-                  <span className="font-semibold text-blue-900">Gold</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-blue-700">Miles Needed:</span>
-                  <span className="font-semibold text-purple-600">{(25000 - historyTotalQualifyingMiles).toLocaleString()}</span>
-                </div>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -479,28 +465,6 @@ export function History() {
                   {historyTotalBonusMiles.toLocaleString()}
                 </div>
                 <p className="text-sm text-green-700">Total Bonus Miles</p>
-                <p className="text-xs text-green-600">Calculated using Vietnam Airlines service class multipliers</p>
-              </div>
-              <div className="bg-white/50 rounded-lg p-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-green-700">Available Miles:</span>
-                  <span className="font-semibold text-green-900">{memberData.currentAvailableMiles.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-green-700">Miles Redeemed:</span>
-                  <span className="font-semibold text-purple-600">{memberData.totalMilesRedeemed.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-green-700">Miles Expiring:</span>
-                  <span className="font-semibold text-red-600">{memberData.milesExpiringEndOfYear.toLocaleString()}</span>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-3 text-xs">
-                  <p className="text-blue-700 font-medium mb-1">Vietnam Airlines Miles Calculation:</p>
-                  <p className="text-blue-600">• Business Class: 1.4-1.5x multiplier</p>
-                  <p className="text-blue-600">• Premium Economy: 1.2-1.3x multiplier</p>
-                  <p className="text-blue-600">• Economy Class: 1.0x base rate</p>
-                  <p className="text-blue-600 mt-1">* Multipliers vary by booking class and route type</p>
-                </div>
               </div>
             </div>
           </CardContent>

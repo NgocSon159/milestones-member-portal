@@ -772,16 +772,16 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
           <Tabs value={selectedTab} onValueChange={setSelectedTab}>
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="upcoming" className="text-sm">
-                Upcoming ({upcomingFlights.length})
+                Upcoming
               </TabsTrigger>
               <TabsTrigger value="ongoing" className="text-sm">
-                Ongoing ({ongoingFlights.length})
+                Ongoing
               </TabsTrigger>
               <TabsTrigger value="past" className="text-sm">
-                Completed ({pastFlights.length})
+                Completed
               </TabsTrigger>
               <TabsTrigger value="cancelled" className="text-sm">
-                Cancelled ({cancelledFlights.length})
+                Cancelled
               </TabsTrigger>
             </TabsList>
 
