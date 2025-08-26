@@ -202,7 +202,7 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }: RegisterFormP
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Member Portal</h1>
-              <p className="text-gray-600">Aviation Miles Program</p>
+              <p className="text-gray-600">Milestones Program</p>
             </div>
           </div>
         </div>

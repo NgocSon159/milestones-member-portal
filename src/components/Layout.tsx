@@ -67,7 +67,7 @@ export function Layout({ children, user, currentPage, onPageChange, onLogout }: 
               </div>
               <div>
                 <h2 className="font-semibold text-gray-900">Member Portal</h2>
-                <p className="text-sm text-gray-500">Aviation Miles</p>
+                <p className="text-sm text-gray-500">Milestones</p>
               </div>
             </div>
           </SidebarHeader>
