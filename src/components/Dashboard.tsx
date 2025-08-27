@@ -227,7 +227,7 @@ export function Dashboard({ onPageChange }: DashboardProps) {
         break;
       case "bonus-miles":
         // Link to History My Request to show bonus miles breakdown
-        onPageChange("history", { tab: "approved", showBonusMiles: true });
+        onPageChange("redeem");
         break;
       case "miles-redeemed":
         // Link to My Vouchers "Total Miles Used"
@@ -503,7 +503,7 @@ export function Dashboard({ onPageChange }: DashboardProps) {
               {/* Summary */}
               <div className="pt-2 border-t">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-600">Total from {memberData.completedFlightsCount} flights</p>
+                  <p className="text-sm text-gray-600">Total from {completedFlights.length} flights</p>
                   <p className="text-sm font-semibold text-blue-600">{memberData.totalQualifyingMiles.toLocaleString()} qualifying miles</p>
                 </div>
               </div>
