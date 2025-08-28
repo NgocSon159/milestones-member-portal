@@ -173,6 +173,8 @@ export function RegisterForm({ onRegisterSuccess, onBackToLogin }: RegisterFormP
       });
   
       if (response.ok) {
+        const responseData = await response.json();
+        localStorage.setItem('token', responseData.token);
         toast.success("Registration successful! Welcome to Member Portal!");
         onRegisterSuccess({
           email: formData.email,

@@ -326,7 +326,7 @@ export function Dashboard({ onPageChange }: DashboardProps) {
         </CardHeader>
         <CardContent>
           {/* Miles Overview Cards - Above Chart */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
             {/* Qualifying Miles - Compact */}
             <Card 
               className="cursor-pointer hover:shadow-sm transition-shadow p-3 border-blue-200"
