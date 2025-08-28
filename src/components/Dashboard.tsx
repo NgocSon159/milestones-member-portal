@@ -19,6 +19,49 @@ import { getMemberData } from "./shared/memberData";
 import axios from "axios";
 import { useState, useEffect } from "react";
 
+interface Membership {
+  id: string;
+  name: string;
+  description: string;
+  milesRequired: number;
+  color: string;
+  benefit: string;
+  autoAssignReward: string | null;
+}
+
+const useMemberships = () => {
+  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMemberships = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem("token");
+        const response = await axios.get<Membership[]>(
+          "https://mileswise-be.onrender.com/api/member/memberships",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setMemberships(response.data);
+      } catch (err) {
+        console.error("Error fetching memberships:", err);
+        setError("Failed to load memberships.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMemberships();
+  }, []);
+
+  return { memberships, loading, error };
+};
+
 interface DashboardProps {
   // user: {
   //   email: string;
@@ -28,8 +71,7 @@ interface DashboardProps {
 }
 
 // Generate chart data that matches the exact totals from member data
-const generateChartDataFromRequests = (requests: any[], dashboardData: any) => {
-  const approvedRequests = requests.filter(request => request.status === 'approved');
+const generateChartDataFromRequests = (dashboardData: any) => {
   
   // Group requests by month and calculate actual earned miles
   const monthlyData: { [key: string]: { 
@@ -96,17 +138,53 @@ const generateChartDataFromRequests = (requests: any[], dashboardData: any) => {
   }));
 };
 
-const getTierInfo = (tier: string) => {
-  switch (tier) {
-    case "Silver":
-      return { color: "text-gray-500", bgColor: "bg-gray-100", icon: Star };
-    case "Gold":
-      return { color: "text-yellow-500", bgColor: "bg-yellow-100", icon: Award };
-    case "Platinum":
-      return { color: "text-purple-500", bgColor: "bg-purple-100", icon: Trophy };
-    default:
-      return { color: "text-gray-500", bgColor: "bg-gray-100", icon: Star };
+const getTierInfo = (tier: string, allMemberships: Membership[]) => {
+  const foundTier = allMemberships.find(m => m.name === tier);
+  if (foundTier) {
+    switch (foundTier.name) {
+      case "Bronze":
+        return { color: "text-[#CD7F32]", bgColor: "bg-orange-100", icon: Star }; // Assuming Star for Bronze
+      case "Silver":
+        return { color: "text-gray-500", bgColor: "bg-gray-100", icon: Star };
+      case "Gold":
+        return { color: "text-yellow-500", bgColor: "bg-yellow-100", icon: Award };
+      case "Platinum":
+        return { color: "text-purple-500", bgColor: "bg-purple-100", icon: Trophy };
+      default:
+        return { color: "text-gray-500", bgColor: "bg-gray-100", icon: Star };
+    }
+  } else {
+    return { color: "text-gray-500", bgColor: "bg-gray-100", icon: Star };
   }
+};
+
+const calculateNextTierRequired = (totalQualifyingMiles: number, memberships: Membership[]) => {
+  // Sort memberships by milesRequired in ascending order
+  const sortedMemberships = [...memberships].sort((a, b) => a.milesRequired - b.milesRequired);
+
+  let nextTierRequired = 0;
+  let nextTierName = "N/A";
+  let milesToNextTier = 0;
+
+  // Find the next tier
+  for (const membership of sortedMemberships) {
+    if (totalQualifyingMiles < membership.milesRequired) {
+      nextTierRequired = membership.milesRequired;
+      nextTierName = membership.name;
+      milesToNextTier = membership.milesRequired - totalQualifyingMiles;
+      break;
+    }
+  }
+
+  // If user has already achieved the highest tier, set nextTierRequired to current total or a meaningful value
+  if (nextTierRequired === 0 && sortedMemberships.length > 0) {
+    const highestTier = sortedMemberships[sortedMemberships.length - 1];
+    nextTierRequired = highestTier.milesRequired; // Or totalQualifyingMiles if already past highest
+    nextTierName = highestTier.name + " (Achieved)"; // Indicate highest tier reached
+    milesToNextTier = 0;
+  }
+
+  return { nextTierRequired, nextTierName, milesToNextTier };
 };
 
 export function Dashboard({ onPageChange }: DashboardProps) {
@@ -115,6 +193,7 @@ export function Dashboard({ onPageChange }: DashboardProps) {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [completedFlights, setCompletedFlights] = useState<any[]>([]);
   const [upcomingFlights, setUpcomingFlights] = useState<any[]>([]);
+  const { memberships, loading, error } = useMemberships();
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -194,10 +273,20 @@ export function Dashboard({ onPageChange }: DashboardProps) {
   // Use shared member data calculation
   const memberData = getMemberData(requests, memberProfile, dashboardData);
 
-  // Generate chart data that matches exact totals
-  const milesChartData = generateChartDataFromRequests(requests, dashboardData);
+  const { nextTierRequired, nextTierName, milesToNextTier } = calculateNextTierRequired(
+    memberData.totalQualifyingMiles,
+    memberships
+  );
 
-  const tierInfo = getTierInfo(memberData.currentTier);
+  // Override memberData's nextTierRequired and milesToNextTier with calculated values
+  memberData.nextTierRequired = nextTierRequired;
+  memberData.milesToNextTier = milesToNextTier;
+  memberData.nextTier = nextTierName;
+
+  // Generate chart data that matches exact totals
+  const milesChartData = generateChartDataFromRequests(dashboardData);
+
+  const tierInfo = getTierInfo(memberData.currentTier, memberships);
   const TierIcon = tierInfo.icon;
 
   const handleQuickAction = (action: string) => {
@@ -243,6 +332,8 @@ export function Dashboard({ onPageChange }: DashboardProps) {
 
   return (
     <div className="space-y-6">
+      {loading && <p>Loading memberships...</p>}
+      {error && <p className="text-red-500">Error: {error}</p>}
       {/* Member Tier Progress - Featured Section */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-100 border-2 border-blue-200">
         <CardHeader>
@@ -280,21 +371,18 @@ export function Dashboard({ onPageChange }: DashboardProps) {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-8">
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-4 h-4 rounded-full ${memberData.totalMilesEarned >= 0 ? 'bg-gray-400' : 'bg-gray-200'}`}></div>
-                    <span className={`text-sm ${memberData.totalQualifyingMiles >= 0 ? 'font-medium text-gray-600' : 'text-gray-400'}`}>Silver</span>
-                    <span className="text-xs text-gray-400">(0 miles)</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-4 h-4 rounded-full ${memberData.totalMilesEarned >= 25000 ? 'bg-yellow-400' : 'bg-gray-200'}`}></div>
-                    <span className={`text-sm ${memberData.totalMilesEarned >= 25000 ? 'font-semibold text-yellow-600' : 'text-gray-400'}`}>Gold</span>
-                    <span className="text-xs text-gray-400">(25,000 miles)</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-4 h-4 rounded-full ${memberData.totalMilesEarned >= 75000 ? 'bg-purple-400' : 'bg-gray-200 border-2 border-purple-300'}`}></div>
-                    <span className={`text-sm ${memberData.totalMilesEarned >= 75000 ? 'font-semibold text-purple-600' : 'text-gray-600'}`}>Platinum</span>
-                    <span className="text-xs text-gray-400">(75,000 miles)</span>
-                  </div>
+                  {memberships.map((membership) => {
+                    const isCurrentTierOrAchieved = memberData.totalQualifyingMiles >= membership.milesRequired;
+                    return (
+                      <div key={membership.id} className="flex items-center space-x-2">
+                        <div className={`w-4 h-4 rounded-full ${isCurrentTierOrAchieved ? 'bg-blue-400' : 'bg-gray-200'}`}></div>
+                        <span className={`text-sm ${isCurrentTierOrAchieved ? 'font-medium text-blue-600' : 'text-gray-400'}`}>
+                          {membership.name}
+                        </span>
+                        <span className="text-xs text-gray-400">({membership.milesRequired.toLocaleString()} miles)</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <div className="space-y-2">

@@ -755,11 +755,6 @@ export function MyFlights({ onPageChange, initialTab = "upcoming", initialFilter
               <p className="text-gray-600 text-sm">Manage all your flights and earn miles</p>
             </div>
           </div>
-          
-          <div className="text-center">
-            <div className="font-bold text-2xl text-blue-600">{memberData.completedFlightsCount}</div>
-            <p className="text-xs text-gray-500">Completed Flights</p>
-          </div>
         </div>
       </div>
 
