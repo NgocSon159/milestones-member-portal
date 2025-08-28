@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog";
 import { toast } from "sonner";
 import { useEarnMiles } from "../EarnMilesContext";
@@ -11,18 +10,13 @@ import {
   Gift, 
   Star,
   Calendar,
-  Clock,
-  CheckCircle,
-  X,
   Award,
   Plane,
   ShoppingBag,
-  Coffee,
   Utensils,
   Car,
   Sparkles,
-  Crown,
-  Diamond
+  Crown
 } from "lucide-react";
 
 interface Reward {
@@ -84,14 +78,7 @@ interface ProfileResponse {
   memberships: MembershipInfo[];
 }
 
-interface User {
-  email: string;
-  name: string;
-}
-
 interface RedeemVoucherProps {
-  user: User;
-  section?: string;
   onPageChange?: (page: string, params?: any) => void;
 }
 
@@ -111,35 +98,16 @@ interface ClaimedVoucher {
   voucherCode: string;
 }
 
-// Mock member data - In real app this would come from API
-const getMemberDataLocal = (email: string) => {
-  // Different tiers based on email for demo purposes
-  if (email.includes("platinum") || email.includes("vip")) {
-    return {
-      tier: "Platinum",
-      totalMiles: 75000,
-      tierMiles: 25000, // Miles in current tier
-      nextTier: null,
-      nextTierMiles: null
-    };
-  } else if (email.includes("gold") || email === "member01@gmail.com") {
-    return {
-      tier: "Gold",
-      totalMiles: 45000,
-      tierMiles: 25000, // Miles in current tier  
-      nextTier: "Platinum",
-      nextTierMiles: 50000
-    };
-  } else {
-    return {
-      tier: "Silver",
-      totalMiles: 15000,
-      tierMiles: 15000, // Miles in current tier
-      nextTier: "Gold", 
-      nextTierMiles: 25000
-    };
-  }
-};
+interface MyReward {
+  id: string;
+  rewardId: string;
+  customerId: string;
+  redeemedOn: string;
+  redeemRewardCode: string;
+  createdAt: string;
+  updatedAt: string;
+  reward: Reward;
+}
 
 const mapRewardToVoucher = (reward: Reward): MappedVoucher => {
   const category = reward.rewardType === "voucher" ? "other" : "other"; // Default to 'other', adjust as needed based on reward name or description
@@ -192,19 +160,6 @@ const getTierIcon = (tier: string) => {
   }
 };
 
-const getTierColor = (tier: string) => {
-  switch (tier) {
-    case "Silver":
-      return "bg-gray-100 text-gray-700";
-    case "Gold":
-      return "bg-yellow-100 text-yellow-700";
-    case "Platinum":
-      return "bg-purple-100 text-purple-700";
-    default:
-      return "bg-gray-100 text-gray-700";
-  }
-};
-
 const getCategoryIcon = (category: string) => {
   switch (category) {
     case "flight":
@@ -224,7 +179,7 @@ const getCategoryIcon = (category: string) => {
   }
 };
 
-export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProps) {
+export function RedeemVoucher({ onPageChange }: RedeemVoucherProps) {
   const { requests } = useEarnMiles();
   const [claimedVouchers, setClaimedVouchers] = useState<ClaimedVoucher[]>([]);
   const [showClaimDialog, setShowClaimDialog] = useState(false);
@@ -235,6 +190,9 @@ export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProp
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [errorProfile, setErrorProfile] = useState<string | null>(null);
+  const [myRewards, setMyRewards] = useState<MyReward[]>([]);
+  const [loadingMyRewards, setLoadingMyRewards] = useState(true);
+  const [errorMyRewards, setErrorMyRewards] = useState<string | null>(null);
 
   const fetchRewards = async () => {
     try {
@@ -282,20 +240,45 @@ export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProp
     }
   };
 
+  const fetchMyRewards = async () => {
+    try {
+      setLoadingMyRewards(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('https://mileswise-be.onrender.com/api/member/my-rewards', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data: MyReward[] = await response.json();
+      setMyRewards(data);
+    } catch (error: any) {
+      setErrorMyRewards(error.message);
+      toast.error("Failed to load my rewards.");
+    } finally {
+      setLoadingMyRewards(false);
+    }
+  };
+
   useEffect(() => {
     fetchRewards();
     fetchProfile();
+    fetchMyRewards();
   }, []);
 
   // Get member data from shared function
-  const sharedMemberData = getMemberData(requests);
-  const localMemberData = getMemberDataLocal(user.email);
+  const sharedMemberData = getMemberData(requests, profile, null);
   
+  const redeemedRewardIds = new Set(myRewards.map(myReward => myReward.rewardId));
+
   // Force Gold tier as requested
   const unifiedMemberData = {
     tier: profile?.memberships[0]?.name || "Silver",
     totalMiles: profile?.totalBonusMiles || 0, 
-    tierMiles: sharedMemberData.currentTierMiles,
+    tierMiles: sharedMemberData.totalQualifyingMiles,
     nextTier: "Platinum",
     nextTierMiles: 75000
   };
@@ -371,35 +354,23 @@ export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProp
       setClaimedVouchers(prev => [...prev, newClaimedVoucher]);
       toast.success(`Voucher claimed successfully! Code: ${voucherCode}`);
       
-      // Re-fetch rewards and profile to update available miles and vouchers
-      await fetchRewards(); 
+      // Re-fetch rewards and profile to update available miles and
+      await fetchRewards();
       await fetchProfile();
+      await fetchMyRewards();
 
-    } catch (error: any) {
-      toast.error(error.message || "Failed to claim voucher.");
-    } finally {
       setShowClaimDialog(false);
       setSelectedVoucher(null);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to claim voucher.");
     }
   };
 
-  const getVoucherStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-700";
-      case "used":
-        return "bg-gray-100 text-gray-700";
-      case "expired":
-        return "bg-red-100 text-red-700";
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
-  };
-
-  const VoucherCard = ({ voucher, isAvailable = true, isLoyalty = false }: { voucher: Voucher; isAvailable?: boolean; isLoyalty?: boolean }) => {
+  const VoucherCard = ({ voucher, isAvailable = true, isLoyalty = false, redeemedRewardIds }: { voucher: Voucher; isAvailable?: boolean; isLoyalty?: boolean; redeemedRewardIds: Set<string> }) => {
     const IconComponent = getCategoryIcon(voucher.category);
     const canClaim = canClaimVoucher(voucher);
-    const isDisabled = !canClaim && isAvailable;
+    const isRedeemed = redeemedRewardIds.has(voucher.id); // Check if voucher is redeemed
+    const isDisabled = (!canClaim && isAvailable) || isRedeemed;
 
     return (
       <Card className={`${isDisabled ? 'opacity-50' : ''} hover:shadow-lg transition-all duration-200 border-0 shadow-sm`}>
@@ -449,7 +420,11 @@ export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProp
             {/* Action button */}
             {isAvailable && (
               <div className="pt-2">
-                {canClaim || isLoyalty ? (
+                {isRedeemed ? (
+                  <Button disabled className="w-full bg-gray-400 text-white" size="sm">
+                    Redeemed
+                  </Button>
+                ) : canClaim || isLoyalty ? (
                   <Button 
                     onClick={() => handleClaimVoucher(voucher)}
                     className={`w-full ${isLoyalty ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
@@ -466,72 +441,6 @@ export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProp
                     }
                   </Button>
                 )}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  const ClaimedVoucherCard = ({ voucher }: { voucher: ClaimedVoucher }) => {
-    const IconComponent = getCategoryIcon(voucher.category);
-    const isExpiring = new Date(voucher.expiryDate) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    return (
-      <Card className="hover:shadow-md transition-shadow">
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-3 bg-blue-100 rounded-full">
-                <IconComponent className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg">{voucher.title}</h3>
-                <p className="text-sm text-gray-600">{voucher.description}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-green-600 mb-1">
-                {voucher.value}
-              </div>
-              <Badge className={getVoucherStatusColor(voucher.status)}>
-                {voucher.status === 'active' && <CheckCircle className="h-3 w-3 mr-1" />}
-                {voucher.status === 'used' && <CheckCircle className="h-3 w-3 mr-1" />}
-                {voucher.status === 'expired' && <X className="h-3 w-3 mr-1" />}
-                {voucher.status.toUpperCase()}
-              </Badge>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Voucher Code</span>
-                <Button variant="outline" size="sm" onClick={() => {
-                  navigator.clipboard.writeText(voucher.voucherCode);
-                  toast.success("Code copied to clipboard!");
-                }}>
-                  Copy
-                </Button>
-              </div>
-              <p className="font-mono text-lg font-bold text-blue-600">{voucher.voucherCode}</p>
-            </div>
-
-            <div className="flex items-center justify-between text-sm text-gray-600">
-              <div className="flex items-center space-x-1">
-                <Calendar className="h-4 w-4" />
-                <span>Claimed: {new Date(voucher.claimedDate).toLocaleDateString()}</span>
-              </div>
-              <div className={`flex items-center space-x-1 ${isExpiring ? 'text-red-600' : ''}`}>
-                <Clock className="h-4 w-4" />
-                <span>Expires: {new Date(voucher.expiryDate).toLocaleDateString()}</span>
-              </div>
-            </div>
-
-            {isExpiring && voucher.status === 'active' && (
-              <div className="p-2 bg-red-50 border border-red-200 rounded">
-                <p className="text-sm text-red-600">⚠️ This voucher expires soon!</p>
               </div>
             )}
           </div>
@@ -585,6 +494,8 @@ export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProp
       {error && <div className="text-center py-12 text-red-600">Error: {error}</div>}
       {loadingProfile && <div className="text-center py-12 text-gray-500">Loading profile...</div>}
       {errorProfile && <div className="text-center py-12 text-red-600">Error: {errorProfile}</div>}
+      {loadingMyRewards && <div className="text-center py-12 text-gray-500">Loading my rewards...</div>}
+      {errorMyRewards && <div className="text-center py-12 text-red-600">Error: {errorMyRewards}</div>}
 
       {!loading && !error && !loadingProfile && !errorProfile && (
         <>
@@ -604,7 +515,7 @@ export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProp
             <CardContent>
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                 {getLoyaltyVouchers().map(voucher => (
-                  <VoucherCard key={voucher.id} voucher={voucher} isAvailable={true} isLoyalty={true} />
+                  <VoucherCard key={voucher.id} voucher={voucher} isAvailable={true} isLoyalty={true} redeemedRewardIds={redeemedRewardIds} />
                 ))}
               </div>
               
@@ -634,7 +545,7 @@ export function RedeemVoucher({ user, section, onPageChange }: RedeemVoucherProp
             <CardContent>
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                 {getAvailableVouchers().map(voucher => (
-                  <VoucherCard key={voucher.id} voucher={voucher} isAvailable={true} isLoyalty={false} />
+                  <VoucherCard key={voucher.id} voucher={voucher} isAvailable={true} isLoyalty={false} redeemedRewardIds={redeemedRewardIds} />
                 ))}
               </div>
               
