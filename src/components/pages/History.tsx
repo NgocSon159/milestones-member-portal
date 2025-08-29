@@ -55,6 +55,33 @@ interface ApiRequest {
   customerId: string;
 }
 
+interface IMembership {
+  id: string;
+  name: string;
+  description: string;
+  milesRequired: number;
+  color: string;
+  benefit: string;
+  autoAssignReward: string | null;
+}
+
+interface IMemberProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  dob: string;
+  streetAddress: string;
+  city: string;
+  country: string;
+  createdAt: string;
+  totalBonusMiles: number;
+  totalQuantifyingMiles: number;
+  customerNumber: string;
+  memberships: IMembership[];
+}
+
 const getStatusIcon = (status: string) => {
   switch (status) {
     case "approved":
@@ -95,6 +122,8 @@ export function History() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  const [memberProfile, setMemberProfile] = useState<IMemberProfile | null>(null);
+
   useEffect(() => {
     const fetchRequests = async () => {
       setLoading(true);
@@ -130,11 +159,41 @@ export function History() {
     fetchRequests();
   }, []);
 
+  useEffect(() => {
+    const fetchMemberProfile = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("Authorization token not found.");
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          "https://mileswise-be.onrender.com/api/member/profile",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        if (!response.ok) {
+          throw new Error(`Error fetching profile: ${response.statusText}`);
+        }
+        const data: IMemberProfile = await response.json();
+        setMemberProfile(data);
+      } catch (error) {
+        console.error("Failed to fetch member profile:", error);
+      }
+    };
+
+    fetchMemberProfile();
+  }, []);
+
   // Get member data for miles calculations
   const memberData = getMemberData(apiRequests, {}, {});
 
   // Calculate total qualifying miles for this page only
-  const historyTotalQualifyingMiles = apiRequests.filter(request => request.status === 'approved').reduce((sum, request) => {
+  const historyTotalQualifyingMiles = memberProfile?.totalQuantifyingMiles ?? apiRequests.filter(request => request.status === 'approved').reduce((sum, request) => {
     const baseDistance = request.flightInfo?.calculationDetails?.baseDistance ?? 0;
     return sum + baseDistance;
   }, 0);
