@@ -163,13 +163,6 @@ export function LoginForm({ onLoginSuccess, onRegisterClick }: LoginFormProps) {
             </Button>
           </form>
 
-          {/* Demo Credentials */}
-          <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-700 font-medium mb-1">Demo Credentials:</p>
-            <p className="text-xs text-blue-600">Email: alice@example.com</p>
-            <p className="text-xs text-blue-600">Password: password123</p>
-          </div>
-
           {/* Divider */}
           <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center">
