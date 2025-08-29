@@ -416,39 +416,6 @@ export function MyProfile({ user, onLogout, onNameUpdate }: MyProfileProps) {
             </div>
           </CardContent>
         </Card>
-
-        {/* Account Security */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Account Security</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button 
-              variant="outline" 
-              className="w-full justify-start"
-              onClick={() => setShowChangePasswordDialog(true)}
-            >
-              <Lock className="h-4 w-4 mr-2" />
-              Change Password
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start text-red-600 hover:text-red-700"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start text-red-600 hover:text-red-700"
-              onClick={() => setShowDeleteAccountDialog(true)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Account
-            </Button>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Save Changes Button */}

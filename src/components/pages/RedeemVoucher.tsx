@@ -431,7 +431,7 @@ export function RedeemVoucher({ onPageChange }: RedeemVoucherProps) {
                     size="sm"
                   >
                     <Gift className="h-4 w-4 mr-2" />
-                    {isLoyalty ? "Claim Free" : "Redeem"}
+                    {isLoyalty ? "Redeem Free" : "Redeem"}
                   </Button>
                 ) : (
                   <Button disabled className="w-full text-xs" size="sm">
